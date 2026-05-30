@@ -128,6 +128,25 @@ export default function Register() {
               "CREATE ACCOUNT"
             )}
           </Button>
+
+          <div className="relative my-2">
+            <div className="absolute inset-0 flex items-center"><span className="w-full border-t border-border" /></div>
+            <div className="relative flex justify-center text-xs"><span className="bg-card px-2 text-muted-foreground">or</span></div>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => base44.auth.loginWithProvider('microsoft', '/')}
+            className="w-full h-12 rounded-full border border-slate-200 bg-white hover:shadow-md transition-shadow flex items-center justify-center gap-3 font-medium text-slate-700"
+          >
+            <svg className="w-5 h-5" viewBox="0 0 21 21" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <rect x="1" y="1" width="9" height="9" fill="#F25022" />
+              <rect x="11" y="1" width="9" height="9" fill="#7FBA00" />
+              <rect x="1" y="11" width="9" height="9" fill="#00A4EF" />
+              <rect x="11" y="11" width="9" height="9" fill="#FFB900" />
+            </svg>
+            Continue with Microsoft
+          </button>
         </form>
       </AuthLayout>
     </>
