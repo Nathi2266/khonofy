@@ -1,0 +1,64 @@
+{
+  "name": "Timesheet",
+  "type": "object",
+  "properties": {
+    "user_id": {
+      "type": "string",
+      "title": "User ID"
+    },
+    "user_name": {
+      "type": "string",
+      "title": "User Name"
+    },
+    "department_id": {
+      "type": "string",
+      "title": "Department ID"
+    },
+    "week_start": {
+      "type": "string",
+      "format": "date",
+      "title": "Week Start"
+    },
+    "week_end": {
+      "type": "string",
+      "format": "date",
+      "title": "Week End"
+    },
+    "status": {
+      "type": "string",
+      "title": "Status",
+      "enum": [
+        "draft",
+        "pending",
+        "approved",
+        "rejected"
+      ],
+      "default": "draft"
+    },
+    "total_hours": {
+      "type": "number",
+      "title": "Total Hours"
+    },
+    "admin_notes": {
+      "type": "string",
+      "title": "Admin Notes"
+    },
+    "submitted_at": {
+      "type": "string",
+      "title": "Submitted At"
+    },
+    "reviewed_by": {
+      "type": "string",
+      "title": "Reviewed By (User ID)"
+    },
+    "reviewed_by_name": {
+      "type": "string",
+      "title": "Reviewed By (Name)"
+    }
+  },
+  "required": [
+    "user_id",
+    "week_start",
+    "week_end"
+  ]
+}

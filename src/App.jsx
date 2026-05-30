@@ -6,7 +6,15 @@ import PageNotFound from './lib/PageNotFound';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import UserNotRegisteredError from '@/components/UserNotRegisteredError';
 import ScrollToTop from './components/ScrollToTop';
-// Add page imports here
+import Layout from './components/Layout';
+import Dashboard from './pages/Dashboard';
+import DailyTaskLog from './pages/DailyTaskLog';
+import TaskManagement from './pages/TaskManagement';
+import TimesheetManagement from './pages/TimesheetManagement';
+import TimesheetReview from './pages/TimesheetReview';
+import TeamManagement from './pages/TeamManagement';
+import AuditTrail from './pages/AuditTrail';
+import Profile from './pages/Profile';
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
@@ -34,7 +42,16 @@ const AuthenticatedApp = () => {
   // Render the main app
   return (
     <Routes>
-      {/* Add your page Route elements here */}
+      <Route element={<Layout />}>
+        <Route path="/" element={<Dashboard />} />
+        <Route path="/daily-log" element={<DailyTaskLog />} />
+        <Route path="/tasks" element={<TaskManagement />} />
+        <Route path="/timesheets" element={<TimesheetManagement />} />
+        <Route path="/timesheets/review" element={<TimesheetReview />} />
+        <Route path="/team" element={<TeamManagement />} />
+        <Route path="/audit-trail" element={<AuditTrail />} />
+        <Route path="/profile" element={<Profile />} />
+      </Route>
       <Route path="*" element={<PageNotFound />} />
     </Routes>
   );

@@ -1,0 +1,38 @@
+{
+  "name": "ActivityLog",
+  "type": "object",
+  "properties": {
+    "user_id": {
+      "type": "string",
+      "title": "User ID"
+    },
+    "user_name": {
+      "type": "string",
+      "title": "User Name"
+    },
+    "action": {
+      "type": "string",
+      "title": "Action"
+    },
+    "entity_type": {
+      "type": "string",
+      "title": "Entity Type"
+    },
+    "entity_id": {
+      "type": "string",
+      "title": "Entity ID"
+    },
+    "details": {
+      "type": "string",
+      "title": "Details"
+    },
+    "department_id": {
+      "type": "string",
+      "title": "Department ID"
+    }
+  },
+  "required": [
+    "user_id",
+    "action"
+  ]
+}

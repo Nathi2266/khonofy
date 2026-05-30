@@ -1,0 +1,24 @@
+{
+  "name": "User",
+  "type": "object",
+  "properties": {
+    "role": {
+      "type": "string",
+      "title": "Role",
+      "enum": [
+        "superuser",
+        "admin",
+        "staff"
+      ],
+      "default": "staff"
+    },
+    "department_id": {
+      "type": "string",
+      "title": "Department ID"
+    },
+    "phone": {
+      "type": "string",
+      "title": "Phone"
+    }
+  }
+}

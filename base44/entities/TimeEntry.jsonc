@@ -1,0 +1,49 @@
+{
+  "name": "TimeEntry",
+  "type": "object",
+  "properties": {
+    "task_id": {
+      "type": "string",
+      "title": "Task ID"
+    },
+    "task_title": {
+      "type": "string",
+      "title": "Task Title"
+    },
+    "user_id": {
+      "type": "string",
+      "title": "User ID"
+    },
+    "user_name": {
+      "type": "string",
+      "title": "User Name"
+    },
+    "date": {
+      "type": "string",
+      "format": "date",
+      "title": "Date"
+    },
+    "hours": {
+      "type": "number",
+      "title": "Hours"
+    },
+    "description": {
+      "type": "string",
+      "title": "Work Description"
+    },
+    "timesheet_id": {
+      "type": "string",
+      "title": "Timesheet ID"
+    },
+    "department_id": {
+      "type": "string",
+      "title": "Department ID"
+    }
+  },
+  "required": [
+    "task_id",
+    "user_id",
+    "date",
+    "hours"
+  ]
+}

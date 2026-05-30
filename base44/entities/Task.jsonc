@@ -1,0 +1,60 @@
+{
+  "name": "Task",
+  "type": "object",
+  "properties": {
+    "title": {
+      "type": "string",
+      "title": "Title"
+    },
+    "description": {
+      "type": "string",
+      "title": "Description"
+    },
+    "due_date": {
+      "type": "string",
+      "format": "date",
+      "title": "Due Date"
+    },
+    "priority": {
+      "type": "string",
+      "title": "Priority",
+      "enum": [
+        "low",
+        "medium",
+        "high",
+        "urgent"
+      ],
+      "default": "medium"
+    },
+    "status": {
+      "type": "string",
+      "title": "Status",
+      "enum": [
+        "todo",
+        "in_progress",
+        "completed",
+        "blocked"
+      ],
+      "default": "todo"
+    },
+    "assigned_to": {
+      "type": "string",
+      "title": "Assigned To (User ID)"
+    },
+    "assigned_to_name": {
+      "type": "string",
+      "title": "Assigned To (Name)"
+    },
+    "department_id": {
+      "type": "string",
+      "title": "Department ID"
+    },
+    "estimated_hours": {
+      "type": "number",
+      "title": "Estimated Hours"
+    }
+  },
+  "required": [
+    "title"
+  ]
+}

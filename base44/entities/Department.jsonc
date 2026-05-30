@@ -1,0 +1,21 @@
+{
+  "name": "Department",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "title": "Name"
+    },
+    "description": {
+      "type": "string",
+      "title": "Description"
+    },
+    "admin_id": {
+      "type": "string",
+      "title": "Admin User ID"
+    }
+  },
+  "required": [
+    "name"
+  ]
+}
