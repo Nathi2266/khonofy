@@ -1,0 +1,38 @@
+{
+  "name": "TaskTemplate",
+  "type": "object",
+  "properties": {
+    "user_id": {
+      "type": "string",
+      "title": "User ID"
+    },
+    "title": {
+      "type": "string",
+      "title": "Template Name"
+    },
+    "description": {
+      "type": "string",
+      "title": "Description"
+    },
+    "tag_id": {
+      "type": "string",
+      "title": "Tag ID"
+    },
+    "tag_name": {
+      "type": "string",
+      "title": "Tag Name"
+    },
+    "tag_color": {
+      "type": "string",
+      "title": "Tag Color"
+    },
+    "estimated_hours": {
+      "type": "number",
+      "title": "Default Hours"
+    }
+  },
+  "required": [
+    "user_id",
+    "title"
+  ]
+}

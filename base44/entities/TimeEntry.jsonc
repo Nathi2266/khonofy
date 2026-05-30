@@ -23,6 +23,10 @@
       "format": "date",
       "title": "Date"
     },
+    "start_hour": {
+      "type": "number",
+      "title": "Start Hour (0-23)"
+    },
     "hours": {
       "type": "number",
       "title": "Hours"
@@ -30,6 +34,18 @@
     "description": {
       "type": "string",
       "title": "Work Description"
+    },
+    "tag_id": {
+      "type": "string",
+      "title": "Tag ID"
+    },
+    "tag_name": {
+      "type": "string",
+      "title": "Tag Name"
+    },
+    "tag_color": {
+      "type": "string",
+      "title": "Tag Color"
     },
     "timesheet_id": {
       "type": "string",
@@ -41,7 +57,6 @@
     }
   },
   "required": [
-    "task_id",
     "user_id",
     "date",
     "hours"

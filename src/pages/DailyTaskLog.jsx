@@ -6,11 +6,10 @@ import { logActivity } from '@/utils/activityLogger';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter
-} from '@/components/ui/dialog';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Clock, Plus, Calendar, CheckCircle2, ChevronDown } from 'lucide-react';
+  Clock, Plus, Calendar, CheckCircle2, ChevronDown, BookmarkPlus, Layers, Trash2
+} from 'lucide-react';
 
 const STATUS_COLORS = {
   todo: 'bg-slate-100 text-slate-600',
@@ -23,9 +22,19 @@ export default function DailyTaskLog() {
   const { data: user } = useCurrentUser();
   const queryClient = useQueryClient();
   const today = new Date().toISOString().split('T')[0];
+
+  // Single task log
   const [selectedTask, setSelectedTask] = useState(null);
-  const [logForm, setLogForm] = useState({ hours: '', description: '', date: today });
+  const [logForm, setLogForm] = useState({ hours: '', description: '', date: today, tag_id: '', tag_name: '', tag_color: '', saveAsTemplate: false });
   const [expandedTask, setExpandedTask] = useState(null);
+
+  // Bulk select
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const [showBulkLog, setShowBulkLog] = useState(false);
+  const [bulkForm, setBulkForm] = useState({ hours: '', description: '', date: today, tag_id: '', tag_name: '', tag_color: '' });
+
+  // Templates
+  const [showTemplates, setShowTemplates] = useState(false);
 
   const { data: myTasks = [], isLoading } = useQuery({
     queryKey: ['myTasks', user?.id],
@@ -45,16 +54,73 @@ export default function DailyTaskLog() {
     enabled: !!user?.id,
   });
 
+  const { data: tags = [] } = useQuery({
+    queryKey: ['tags'],
+    queryFn: () => base44.entities.Tag.list(),
+  });
+
+  const { data: templates = [] } = useQuery({
+    queryKey: ['templates', user?.id],
+    queryFn: () => base44.entities.TaskTemplate.filter({ user_id: user.id }),
+    enabled: !!user?.id,
+  });
+
   const logTimeMutation = useMutation({
     mutationFn: (data) => base44.entities.TimeEntry.create(data),
     onSuccess: async (entry) => {
       queryClient.invalidateQueries({ queryKey: ['timeEntries'] });
       queryClient.invalidateQueries({ queryKey: ['allMyEntries'] });
-      queryClient.invalidateQueries({ queryKey: ['todayEntries'] });
       if (user) await logActivity(user, 'Logged time', 'TimeEntry', entry.id, `${logForm.hours}h on "${selectedTask?.title}"`);
+      // Save template if checked
+      if (logForm.saveAsTemplate && selectedTask) {
+        await base44.entities.TaskTemplate.create({
+          user_id: user.id,
+          title: selectedTask.title,
+          description: logForm.description,
+          tag_id: logForm.tag_id,
+          tag_name: logForm.tag_name,
+          tag_color: logForm.tag_color,
+          estimated_hours: parseFloat(logForm.hours),
+        });
+        queryClient.invalidateQueries({ queryKey: ['templates'] });
+      }
       setSelectedTask(null);
-      setLogForm({ hours: '', description: '', date: today });
+      setLogForm({ hours: '', description: '', date: today, tag_id: '', tag_name: '', tag_color: '', saveAsTemplate: false });
     },
+  });
+
+  const bulkLogMutation = useMutation({
+    mutationFn: async (taskIds) => {
+      return Promise.all(taskIds.map(taskId => {
+        const task = myTasks.find(t => t.id === taskId);
+        return base44.entities.TimeEntry.create({
+          task_id: taskId,
+          task_title: task?.title || '',
+          user_id: user.id,
+          user_name: user.full_name,
+          date: bulkForm.date,
+          hours: parseFloat(bulkForm.hours),
+          description: bulkForm.description,
+          tag_id: bulkForm.tag_id,
+          tag_name: bulkForm.tag_name,
+          tag_color: bulkForm.tag_color,
+          department_id: user.department_id || '',
+        });
+      }));
+    },
+    onSuccess: async () => {
+      queryClient.invalidateQueries({ queryKey: ['timeEntries'] });
+      queryClient.invalidateQueries({ queryKey: ['allMyEntries'] });
+      if (user) await logActivity(user, 'Bulk logged time', 'TimeEntry', '', `${bulkForm.hours}h × ${selectedIds.size} tasks`);
+      setSelectedIds(new Set());
+      setShowBulkLog(false);
+      setBulkForm({ hours: '', description: '', date: today, tag_id: '', tag_name: '', tag_color: '' });
+    },
+  });
+
+  const deleteTemplateMutation = useMutation({
+    mutationFn: (id) => base44.entities.TaskTemplate.delete(id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['templates'] }),
   });
 
   const updateTaskMutation = useMutation({
@@ -63,6 +129,14 @@ export default function DailyTaskLog() {
   });
 
   const hoursToday = todayEntries.reduce((sum, e) => sum + (e.hours || 0), 0);
+  const activeTasks = myTasks.filter(t => t.status !== 'completed');
+  const completedTasks = myTasks.filter(t => t.status === 'completed');
+
+  const handleTagChange = (tagId, isLog = true) => {
+    const tag = tags.find(t => t.id === tagId);
+    if (isLog) setLogForm({ ...logForm, tag_id: tagId, tag_name: tag?.name || '', tag_color: tag?.color || '' });
+    else setBulkForm({ ...bulkForm, tag_id: tagId, tag_name: tag?.name || '', tag_color: tag?.color || '' });
+  };
 
   const handleLogTime = () => {
     if (!logForm.hours || !selectedTask) return;
@@ -74,17 +148,35 @@ export default function DailyTaskLog() {
       date: logForm.date,
       hours: parseFloat(logForm.hours),
       description: logForm.description,
+      tag_id: logForm.tag_id,
+      tag_name: logForm.tag_name,
+      tag_color: logForm.tag_color,
       department_id: user.department_id || '',
     });
   };
 
-  const activeTasks = myTasks.filter(t => t.status !== 'completed');
-  const completedTasks = myTasks.filter(t => t.status === 'completed');
+  const applyTemplate = (tpl) => {
+    setLogForm(f => ({
+      ...f,
+      description: tpl.description || '',
+      hours: tpl.estimated_hours ? String(tpl.estimated_hours) : f.hours,
+      tag_id: tpl.tag_id || '',
+      tag_name: tpl.tag_name || '',
+      tag_color: tpl.tag_color || '',
+    }));
+  };
+
+  const toggleSelect = (id) => {
+    const next = new Set(selectedIds);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    setSelectedIds(next);
+  };
 
   if (!user) return null;
 
   return (
     <div className="p-6 max-w-4xl mx-auto space-y-6">
+      {/* Header */}
       <div className="flex items-start justify-between">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Daily Task Log</h1>
@@ -93,22 +185,69 @@ export default function DailyTaskLog() {
             {new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
           </p>
         </div>
-        <div className="bg-primary/10 border border-primary/20 rounded-xl px-4 py-3 text-center">
-          <p className="text-2xl font-bold text-primary">{hoursToday.toFixed(1)}h</p>
-          <p className="text-xs text-primary/70 font-medium">logged today</p>
+        <div className="flex items-center gap-3">
+          {selectedIds.size > 0 && (
+            <Button onClick={() => setShowBulkLog(true)} variant="outline" className="gap-2 border-primary text-primary hover:bg-primary/5">
+              <Layers className="w-4 h-4" /> Log {selectedIds.size} Selected
+            </Button>
+          )}
+          <div className="bg-primary/10 border border-primary/20 rounded-xl px-4 py-3 text-center">
+            <p className="text-2xl font-bold text-primary">{hoursToday.toFixed(1)}h</p>
+            <p className="text-xs text-primary/70 font-medium">logged today</p>
+          </div>
         </div>
       </div>
 
-      {/* Today's entries summary */}
+      {/* Templates section */}
+      {templates.length > 0 && (
+        <div className="bg-card rounded-xl border border-border p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-semibold text-foreground flex items-center gap-1.5">
+              <BookmarkPlus className="w-4 h-4 text-primary" /> Saved Templates
+            </h3>
+            <Button variant="ghost" size="sm" className="text-xs" onClick={() => setShowTemplates(!showTemplates)}>
+              {showTemplates ? 'Hide' : 'Show all'}
+            </Button>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {(showTemplates ? templates : templates.slice(0, 6)).map(tpl => (
+              <div key={tpl.id} className="group flex items-center gap-1 rounded-full border border-border bg-muted/40 pl-3 pr-1 py-1 hover:border-primary transition-colors">
+                <span className="text-xs font-medium text-foreground">{tpl.title}</span>
+                {tpl.estimated_hours && <span className="text-xs text-muted-foreground">· {tpl.estimated_hours}h</span>}
+                {tpl.tag_name && (
+                  <span className="text-xs px-1.5 py-0.5 rounded-full text-white ml-1" style={{ backgroundColor: tpl.tag_color || '#6366f1' }}>
+                    {tpl.tag_name}
+                  </span>
+                )}
+                <button
+                  className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive p-0.5 rounded-full ml-1"
+                  onClick={() => deleteTemplateMutation.mutate(tpl.id)}
+                >
+                  <Trash2 className="w-3 h-3" />
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Today's entries */}
       {todayEntries.length > 0 && (
         <div className="bg-card rounded-xl border border-border p-4">
           <h2 className="font-semibold text-foreground text-sm mb-3">Today's Logged Time</h2>
           <div className="space-y-2">
             {todayEntries.map(entry => (
               <div key={entry.id} className="flex items-center justify-between py-1.5 px-3 rounded-lg bg-muted/50">
-                <div>
-                  <p className="text-sm font-medium text-foreground">{entry.task_title || 'Task'}</p>
-                  {entry.description && <p className="text-xs text-muted-foreground">{entry.description}</p>}
+                <div className="flex items-center gap-2">
+                  <div>
+                    <p className="text-sm font-medium text-foreground">{entry.task_title || 'Task'}</p>
+                    {entry.description && <p className="text-xs text-muted-foreground">{entry.description}</p>}
+                  </div>
+                  {entry.tag_name && (
+                    <span className="text-xs px-2 py-0.5 rounded-full text-white" style={{ backgroundColor: entry.tag_color || '#6366f1' }}>
+                      {entry.tag_name}
+                    </span>
+                  )}
                 </div>
                 <span className="text-sm font-semibold text-primary">{entry.hours}h</span>
               </div>
@@ -117,95 +256,117 @@ export default function DailyTaskLog() {
         </div>
       )}
 
-      {/* Active tasks */}
-      <div>
-        <h2 className="font-semibold text-foreground mb-3">
-          Active Tasks <span className="text-muted-foreground font-normal text-sm">({activeTasks.length})</span>
-        </h2>
-        {isLoading && <p className="text-muted-foreground text-sm text-center py-6">Loading your tasks...</p>}
-        <div className="space-y-3">
-          {activeTasks.map(task => {
-            const taskEntries = allEntries.filter(e => e.task_id === task.id);
-            const totalLogged = taskEntries.reduce((sum, e) => sum + (e.hours || 0), 0);
-            const isExpanded = expandedTask === task.id;
-            return (
-              <div key={task.id} className="bg-card rounded-xl border border-border overflow-hidden">
-                <div
-                  className="p-4 cursor-pointer hover:bg-muted/30 transition-colors"
-                  onClick={() => setExpandedTask(isExpanded ? null : task.id)}
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-foreground text-sm">{task.title}</p>
-                      {task.description && <p className="text-muted-foreground text-xs mt-0.5 line-clamp-1">{task.description}</p>}
-                      <div className="flex items-center gap-2 mt-2">
-                        <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${STATUS_COLORS[task.status] || STATUS_COLORS.todo}`}>
-                          {task.status?.replace('_', ' ')}
-                        </span>
-                        <span className="text-xs text-muted-foreground">{totalLogged}h logged</span>
-                        {task.estimated_hours && (
-                          <span className="text-xs text-muted-foreground">/ {task.estimated_hours}h est.</span>
-                        )}
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2 flex-shrink-0">
-                      <Button
-                        size="sm"
-                        className="gap-1.5 h-8"
-                        onClick={(e) => { e.stopPropagation(); setSelectedTask(task); }}
-                      >
-                        <Plus className="w-3.5 h-3.5" /> Log Time
-                      </Button>
-                      <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
-                    </div>
-                  </div>
-                </div>
-                {isExpanded && (
-                  <div className="border-t border-border px-4 pb-4 pt-3 bg-muted/20">
-                    <div className="flex items-center gap-3 mb-3">
-                      <label className="text-xs font-medium text-muted-foreground">Update Status:</label>
-                      <select
-                        className="text-xs border border-border rounded-md px-2 py-1 bg-background"
-                        value={task.status}
-                        onChange={(e) => updateTaskMutation.mutate({ id: task.id, data: { status: e.target.value } })}
-                      >
-                        <option value="todo">To Do</option>
-                        <option value="in_progress">In Progress</option>
-                        <option value="completed">Completed</option>
-                        <option value="blocked">Blocked</option>
-                      </select>
-                    </div>
-                    {taskEntries.length > 0 && (
-                      <div className="space-y-1.5">
-                        <p className="text-xs font-medium text-muted-foreground">Time History</p>
-                        {taskEntries.slice(-5).map(e => (
-                          <div key={e.id} className="flex justify-between text-xs py-1 px-2 rounded bg-background">
-                            <span className="text-muted-foreground">{new Date(e.date).toLocaleDateString()} — {e.description || 'No note'}</span>
-                            <span className="font-semibold text-foreground">{e.hours}h</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-          {activeTasks.length === 0 && !isLoading && (
-            <div className="text-center py-12 bg-card rounded-xl border border-border">
-              <CheckCircle2 className="w-10 h-10 text-emerald-500 mx-auto mb-3" />
-              <p className="font-semibold text-foreground">All tasks complete!</p>
-              <p className="text-muted-foreground text-sm">No active tasks assigned to you.</p>
-            </div>
+      {/* Select all / clear */}
+      {activeTasks.length > 0 && (
+        <div className="flex items-center gap-3">
+          <h2 className="font-semibold text-foreground flex-1">
+            Active Tasks <span className="text-muted-foreground font-normal text-sm">({activeTasks.length})</span>
+          </h2>
+          <button className="text-xs text-primary hover:underline" onClick={() => setSelectedIds(new Set(activeTasks.map(t => t.id)))}>
+            Select all
+          </button>
+          {selectedIds.size > 0 && (
+            <button className="text-xs text-muted-foreground hover:underline" onClick={() => setSelectedIds(new Set())}>
+              Clear
+            </button>
           )}
         </div>
+      )}
+
+      {/* Active task cards */}
+      {isLoading && <p className="text-muted-foreground text-sm text-center py-6">Loading your tasks...</p>}
+      <div className="space-y-3">
+        {activeTasks.map(task => {
+          const taskEntries = allEntries.filter(e => e.task_id === task.id);
+          const totalLogged = taskEntries.reduce((sum, e) => sum + (e.hours || 0), 0);
+          const isExpanded = expandedTask === task.id;
+          const isChecked = selectedIds.has(task.id);
+          return (
+            <div key={task.id} className={`bg-card rounded-xl border transition-all overflow-hidden ${isChecked ? 'border-primary ring-1 ring-primary/20' : 'border-border'}`}>
+              <div className="p-4">
+                <div className="flex items-start gap-3">
+                  {/* Checkbox */}
+                  <button
+                    onClick={() => toggleSelect(task.id)}
+                    className={`mt-0.5 w-5 h-5 rounded border-2 flex-shrink-0 flex items-center justify-center transition-colors ${
+                      isChecked ? 'bg-primary border-primary' : 'border-border hover:border-primary'
+                    }`}
+                  >
+                    {isChecked && <CheckCircle2 className="w-3.5 h-3.5 text-white" />}
+                  </button>
+
+                  <div className="flex-1 min-w-0 cursor-pointer" onClick={() => setExpandedTask(isExpanded ? null : task.id)}>
+                    <p className="font-semibold text-foreground text-sm">{task.title}</p>
+                    {task.description && <p className="text-muted-foreground text-xs mt-0.5 line-clamp-1">{task.description}</p>}
+                    <div className="flex items-center gap-2 mt-2">
+                      <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${STATUS_COLORS[task.status] || STATUS_COLORS.todo}`}>
+                        {task.status?.replace('_', ' ')}
+                      </span>
+                      <span className="text-xs text-muted-foreground">{totalLogged}h logged</span>
+                      {task.estimated_hours && <span className="text-xs text-muted-foreground">/ {task.estimated_hours}h est.</span>}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <Button size="sm" className="gap-1.5 h-8" onClick={(e) => { e.stopPropagation(); setSelectedTask(task); setLogForm({ hours: '', description: '', date: today, tag_id: '', tag_name: '', tag_color: '', saveAsTemplate: false }); }}>
+                      <Plus className="w-3.5 h-3.5" /> Log Time
+                    </Button>
+                    <ChevronDown
+                      className={`w-4 h-4 text-muted-foreground transition-transform cursor-pointer ${isExpanded ? 'rotate-180' : ''}`}
+                      onClick={() => setExpandedTask(isExpanded ? null : task.id)}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {isExpanded && (
+                <div className="border-t border-border px-4 pb-4 pt-3 bg-muted/20">
+                  <div className="flex items-center gap-3 mb-3">
+                    <label className="text-xs font-medium text-muted-foreground">Update Status:</label>
+                    <select
+                      className="text-xs border border-border rounded-md px-2 py-1 bg-background"
+                      value={task.status}
+                      onChange={(e) => updateTaskMutation.mutate({ id: task.id, data: { status: e.target.value } })}
+                    >
+                      <option value="todo">To Do</option>
+                      <option value="in_progress">In Progress</option>
+                      <option value="completed">Completed</option>
+                      <option value="blocked">Blocked</option>
+                    </select>
+                  </div>
+                  {taskEntries.length > 0 && (
+                    <div className="space-y-1.5">
+                      <p className="text-xs font-medium text-muted-foreground">Time History</p>
+                      {taskEntries.slice(-5).map(e => (
+                        <div key={e.id} className="flex justify-between text-xs py-1 px-2 rounded bg-background items-center">
+                          <span className="text-muted-foreground">{new Date(e.date).toLocaleDateString()} — {e.description || 'No note'}</span>
+                          <div className="flex items-center gap-2">
+                            {e.tag_name && (
+                              <span className="px-1.5 py-0.5 rounded-full text-white text-xs" style={{ backgroundColor: e.tag_color || '#6366f1' }}>{e.tag_name}</span>
+                            )}
+                            <span className="font-semibold text-foreground">{e.hours}h</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+        {activeTasks.length === 0 && !isLoading && (
+          <div className="text-center py-12 bg-card rounded-xl border border-border">
+            <CheckCircle2 className="w-10 h-10 text-emerald-500 mx-auto mb-3" />
+            <p className="font-semibold text-foreground">All tasks complete!</p>
+            <p className="text-muted-foreground text-sm">No active tasks assigned to you.</p>
+          </div>
+        )}
       </div>
 
       {completedTasks.length > 0 && (
         <div>
-          <h2 className="font-semibold text-foreground mb-3 text-muted-foreground">
-            Completed <span className="font-normal text-sm">({completedTasks.length})</span>
-          </h2>
+          <h2 className="font-semibold text-muted-foreground mb-3">Completed <span className="font-normal text-sm">({completedTasks.length})</span></h2>
           <div className="space-y-2">
             {completedTasks.map(task => (
               <div key={task.id} className="bg-card rounded-xl border border-border p-4 opacity-60">
@@ -216,50 +377,114 @@ export default function DailyTaskLog() {
         </div>
       )}
 
-      {/* Log Time Dialog */}
+      {/* Single Log Dialog */}
       <Dialog open={!!selectedTask} onOpenChange={() => setSelectedTask(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Log Time — {selectedTask?.title}</DialogTitle>
-          </DialogHeader>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>Log Time — {selectedTask?.title}</DialogTitle></DialogHeader>
           <div className="space-y-4 py-2">
+            {templates.length > 0 && (
+              <div>
+                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide block mb-1.5">Quick Templates</label>
+                <div className="flex flex-wrap gap-1.5">
+                  {templates.slice(0, 5).map(tpl => (
+                    <button key={tpl.id} type="button" onClick={() => applyTemplate(tpl)}
+                      className="text-xs px-2.5 py-1 rounded-full border border-border hover:border-primary hover:text-primary transition-colors bg-muted/40">
+                      {tpl.title}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
             <div>
               <label className="text-sm font-medium text-foreground mb-1.5 block">Date</label>
-              <Input
-                type="date"
-                value={logForm.date}
-                onChange={(e) => setLogForm({ ...logForm, date: e.target.value })}
-              />
+              <Input type="date" value={logForm.date} onChange={(e) => setLogForm({ ...logForm, date: e.target.value })} />
             </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-sm font-medium text-foreground mb-1.5 block">Hours Worked</label>
+                <Input type="number" step="0.5" min="0.5" max="24" placeholder="e.g. 2.5" value={logForm.hours} onChange={(e) => setLogForm({ ...logForm, hours: e.target.value })} />
+              </div>
+              <div>
+                <label className="text-sm font-medium text-foreground mb-1.5 block">Tag</label>
+                <select className="w-full text-sm border border-border rounded-lg px-3 py-2 bg-background" value={logForm.tag_id} onChange={(e) => handleTagChange(e.target.value, true)}>
+                  <option value="">No tag</option>
+                  {tags.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                </select>
+              </div>
+            </div>
+            {logForm.tag_id && (
+              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold text-white" style={{ backgroundColor: logForm.tag_color || '#6366f1' }}>
+                {logForm.tag_name}
+              </span>
+            )}
             <div>
-              <label className="text-sm font-medium text-foreground mb-1.5 block">Hours Worked</label>
-              <Input
-                type="number"
-                step="0.5"
-                min="0.5"
-                max="24"
-                placeholder="e.g. 2.5"
-                value={logForm.hours}
-                onChange={(e) => setLogForm({ ...logForm, hours: e.target.value })}
-              />
+              <label className="text-sm font-medium text-foreground mb-1.5 block">Description</label>
+              <Textarea placeholder="What did you work on?" value={logForm.description} onChange={(e) => setLogForm({ ...logForm, description: e.target.value })} rows={3} />
             </div>
-            <div>
-              <label className="text-sm font-medium text-foreground mb-1.5 block">Work Description</label>
-              <Textarea
-                placeholder="What did you work on?"
-                value={logForm.description}
-                onChange={(e) => setLogForm({ ...logForm, description: e.target.value })}
-                rows={3}
-              />
-            </div>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" className="rounded" checked={logForm.saveAsTemplate} onChange={(e) => setLogForm({ ...logForm, saveAsTemplate: e.target.checked })} />
+              <span className="text-sm text-foreground flex items-center gap-1.5">
+                <BookmarkPlus className="w-4 h-4 text-primary" /> Save as template for future use
+              </span>
+            </label>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setSelectedTask(null)}>Cancel</Button>
-            <Button
-              onClick={handleLogTime}
-              disabled={!logForm.hours || logTimeMutation.isPending}
-            >
+            <Button onClick={handleLogTime} disabled={!logForm.hours || logTimeMutation.isPending}>
               {logTimeMutation.isPending ? 'Saving...' : 'Save Entry'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk Log Dialog */}
+      <Dialog open={showBulkLog} onOpenChange={() => setShowBulkLog(false)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Layers className="w-5 h-5 text-primary" />
+              Bulk Log — {selectedIds.size} Tasks
+            </DialogTitle>
+          </DialogHeader>
+          <div className="py-2 space-y-1">
+            <p className="text-xs text-muted-foreground mb-3">These hours and details will be applied to all selected tasks:</p>
+            <div className="flex flex-wrap gap-1.5 mb-3">
+              {[...selectedIds].map(id => {
+                const task = myTasks.find(t => t.id === id);
+                return task ? (
+                  <span key={id} className="text-xs bg-primary/10 text-primary px-2.5 py-1 rounded-full font-medium">{task.title}</span>
+                ) : null;
+              })}
+            </div>
+            <div>
+              <label className="text-sm font-medium mb-1.5 block">Date</label>
+              <Input type="date" value={bulkForm.date} onChange={(e) => setBulkForm({ ...bulkForm, date: e.target.value })} />
+            </div>
+            <div className="grid grid-cols-2 gap-3 pt-1">
+              <div>
+                <label className="text-sm font-medium mb-1.5 block">Hours (per task)</label>
+                <Input type="number" step="0.5" min="0.5" placeholder="e.g. 2" value={bulkForm.hours} onChange={(e) => setBulkForm({ ...bulkForm, hours: e.target.value })} />
+              </div>
+              <div>
+                <label className="text-sm font-medium mb-1.5 block">Tag</label>
+                <select className="w-full text-sm border border-border rounded-lg px-3 py-2 bg-background" value={bulkForm.tag_id} onChange={(e) => handleTagChange(e.target.value, false)}>
+                  <option value="">No tag</option>
+                  {tags.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                </select>
+              </div>
+            </div>
+            <div className="pt-1">
+              <label className="text-sm font-medium mb-1.5 block">Description</label>
+              <Textarea placeholder="Work description (applies to all tasks)" value={bulkForm.description} onChange={(e) => setBulkForm({ ...bulkForm, description: e.target.value })} rows={2} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowBulkLog(false)}>Cancel</Button>
+            <Button
+              onClick={() => bulkLogMutation.mutate([...selectedIds])}
+              disabled={!bulkForm.hours || bulkLogMutation.isPending}
+            >
+              {bulkLogMutation.isPending ? 'Logging...' : `Log ${selectedIds.size} Tasks`}
             </Button>
           </DialogFooter>
         </DialogContent>

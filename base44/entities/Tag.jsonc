@@ -1,0 +1,21 @@
+{
+  "name": "Tag",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "title": "Tag Name"
+    },
+    "color": {
+      "type": "string",
+      "title": "Color (hex)"
+    },
+    "description": {
+      "type": "string",
+      "title": "Description"
+    }
+  },
+  "required": [
+    "name"
+  ]
+}

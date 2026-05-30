@@ -15,6 +15,9 @@ import TimesheetReview from './pages/TimesheetReview';
 import TeamManagement from './pages/TeamManagement';
 import AuditTrail from './pages/AuditTrail';
 import Profile from './pages/Profile';
+import CalendarView from './pages/CalendarView';
+import TagManagement from './pages/TagManagement';
+import AdminReports from './pages/AdminReports';
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
@@ -51,6 +54,9 @@ const AuthenticatedApp = () => {
         <Route path="/team" element={<TeamManagement />} />
         <Route path="/audit-trail" element={<AuditTrail />} />
         <Route path="/profile" element={<Profile />} />
+        <Route path="/calendar" element={<CalendarView />} />
+        <Route path="/tags" element={<TagManagement />} />
+        <Route path="/admin-reports" element={<AdminReports />} />
       </Route>
       <Route path="*" element={<PageNotFound />} />
     </Routes>
