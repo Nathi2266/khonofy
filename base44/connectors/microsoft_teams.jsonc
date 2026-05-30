@@ -1,0 +1,9 @@
+{
+  "type": "microsoft_teams",
+  "scopes": [
+    "User.Read",
+    "ChannelMessage.Send",
+    "Team.ReadBasic.All",
+    "Channel.ReadBasic.All"
+  ]
+}
