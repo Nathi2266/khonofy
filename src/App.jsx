@@ -19,6 +19,7 @@ import Profile from './pages/Profile';
 import CalendarView from './pages/CalendarView';
 import TagManagement from './pages/TagManagement';
 import AdminReports from './pages/AdminReports';
+import DeptHeadSummary from './pages/DeptHeadSummary';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import ForgotPassword from './pages/ForgotPassword';
@@ -50,6 +51,7 @@ function App() {
                   <Route path="/calendar" element={<CalendarView />} />
                   <Route path="/tags" element={<TagManagement />} />
                   <Route path="/admin-reports" element={<AdminReports />} />
+        <Route path="/dept-summary" element={<DeptHeadSummary />} />
                 </Route>
               </Route>
               <Route path="*" element={<PageNotFound />} />
