@@ -43,6 +43,7 @@ export default function Register() {
     }
     setLoading(true);
     try {
+      // @ts-ignore
       await base44.auth.register({ email: trimmedEmail, password: trimmedPassword, fullName: "", phone: "" });
       await checkUserAuth();
       navigate("/", { replace: true });
@@ -148,6 +149,7 @@ export default function Register() {
 
           <button
             type="button"
+            // @ts-ignore
             onClick={() => base44.auth.loginWithProvider('microsoft', '/')}
             className="w-full h-12 rounded-full border border-slate-200 bg-white hover:shadow-md transition-shadow flex items-center justify-center gap-3 font-medium text-slate-700"
           >

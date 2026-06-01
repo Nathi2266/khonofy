@@ -7,8 +7,11 @@ const DATE_ONLY_FIELDS = {
 const ISO_FIELDS = {
   user: new Set(['createdAt', 'updatedAt', 'resetTokenExpiresAt']),
   department: new Set(['createdAt', 'updatedAt']),
+  designation: new Set(['createdAt', 'updatedAt']),
+  client: new Set(['createdAt', 'updatedAt']),
+  project: new Set(['createdAt', 'updatedAt']),
   task: new Set(['createdAt', 'updatedAt']),
-  timeEntry: new Set(['createdAt', 'updatedAt']),
+  timeEntry: new Set(['createdAt', 'updatedAt', 'startAt', 'endAt']),
   timesheet: new Set(['createdAt', 'updatedAt', 'submittedAt']),
   tag: new Set(['createdAt', 'updatedAt']),
   taskTemplate: new Set(['createdAt', 'updatedAt']),

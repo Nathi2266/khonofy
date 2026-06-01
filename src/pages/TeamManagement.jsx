@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
-import { Users, CheckSquare, Clock, TrendingUp } from 'lucide-react';
+import { Users } from 'lucide-react';
 import PageHeader from '@/components/PageHeader';
 import PageShell from '@/components/PageShell';
 

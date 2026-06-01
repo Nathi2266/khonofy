@@ -6,7 +6,17 @@ import { logActivity } from '@/utils/activityLogger';
 import { Button } from '@/components/ui/button';
 import PageHeader from '@/components/PageHeader';
 import PageShell from '@/components/PageShell';
-import { Clock, Send, ChevronDown, CheckCircle2, XCircle, AlertCircle } from 'lucide-react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { Clock, Send, ChevronDown, CheckCircle2, XCircle, AlertCircle, Undo2 } from 'lucide-react';
 
 function getWeekBounds(offset = 0) {
   const now = new Date();
@@ -33,6 +43,7 @@ export default function TimesheetManagement() {
   const queryClient = useQueryClient();
   const [weekOffset, setWeekOffset] = useState(0);
   const [expanded, setExpanded] = useState(null);
+  const [timesheetToWithdraw, setTimesheetToWithdraw] = useState(null);
   const week = getWeekBounds(weekOffset);
 
   const { data: timeEntries = [] } = useQuery({
@@ -80,6 +91,28 @@ export default function TimesheetManagement() {
     },
   });
 
+  const withdrawTimesheet = useMutation({
+    mutationFn: async (timesheet) => {
+      return base44.entities.Timesheet.update(timesheet.id, {
+        status: 'draft',
+        submitted_at: null,
+      });
+    },
+    onSuccess: async (_updated, timesheet) => {
+      queryClient.invalidateQueries({ queryKey: ['myTimesheets'] });
+      if (user) {
+        await logActivity(
+          user,
+          'Withdrew timesheet submission',
+          'Timesheet',
+          timesheet.id,
+          `Week of ${timesheet.week_start}`
+        );
+      }
+      setTimesheetToWithdraw(null);
+    },
+  });
+
   // Group entries by date
   const byDate = timeEntries.reduce((acc, e) => {
     const d = e.date;
@@ -103,7 +136,7 @@ export default function TimesheetManagement() {
         title="My Timesheets"
         description="Review and submit your weekly time for approval."
       />
-      <div className="max-w-3xl space-y-6">
+      <div className="w-full space-y-6">
 
       {/* Week selector */}
       <div className="bg-card rounded-xl border border-border p-4">
@@ -227,7 +260,21 @@ export default function TimesheetManagement() {
                   <p className="text-xs text-red-600 mt-0.5">Note: {ts.admin_notes}</p>
                 )}
               </div>
-              <StatusBadge status={ts.status} />
+              <div className="flex items-center gap-2">
+                <StatusBadge status={ts.status} />
+                {ts.status === 'pending' && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="gap-1.5"
+                    onClick={() => setTimesheetToWithdraw(ts)}
+                  >
+                    <Undo2 className="w-3.5 h-3.5" />
+                    Withdraw
+                  </Button>
+                )}
+              </div>
             </div>
           ))}
           {timesheets.length === 0 && (
@@ -236,6 +283,27 @@ export default function TimesheetManagement() {
         </div>
       </div>
       </div>
+
+      <AlertDialog open={!!timesheetToWithdraw} onOpenChange={() => setTimesheetToWithdraw(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Withdraw submitted timesheet?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will move the timesheet back to draft so you can make changes and submit it again.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={withdrawTimesheet.isPending}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => withdrawTimesheet.mutate(timesheetToWithdraw)}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={withdrawTimesheet.isPending}
+            >
+              {withdrawTimesheet.isPending ? 'Withdrawing...' : 'Withdraw'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </PageShell>
   );
 }

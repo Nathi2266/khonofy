@@ -28,6 +28,9 @@ const RESOURCE_MAP = {
   'time-entries': { model: 'timeEntry', serialize: 'timeEntry' },
   timesheets: { model: 'timesheet', serialize: 'timesheet' },
   departments: { model: 'department', serialize: 'department' },
+  designations: { model: 'designation', serialize: 'designation' },
+  clients: { model: 'client', serialize: 'client' },
+  projects: { model: 'project', serialize: 'project' },
   tags: { model: 'tag', serialize: 'tag' },
   'task-templates': { model: 'taskTemplate', serialize: 'taskTemplate' },
   'activity-logs': { model: 'activityLog', serialize: 'activityLog' },
@@ -41,8 +44,11 @@ const DATE_ONLY_FIELDS = {
 
 const DATE_TIME_FIELDS = {
   user: new Set(['resetTokenExpiresAt']),
+  timeEntry: new Set(['startAt', 'endAt']),
   timesheet: new Set(['submittedAt']),
 };
+
+const ENTRY_MAX_DURATION_HOURS = 24;
 
 function sendError(res, status, message) {
   return res.status(status).json({ message });
@@ -107,6 +113,30 @@ function scopeWhere(resource, user) {
       if (isAdmin(user) && user.departmentId) return { departmentId: user.departmentId };
       return { userId: user.id };
     case 'departments':
+    case 'designations':
+    case 'clients':
+      return {};
+    case 'projects':
+      if (isAdmin(user) && user.departmentId) {
+        return {
+          OR: [
+            { departmentId: user.departmentId },
+            { departmentId: null },
+          ],
+        };
+      }
+      if (user?.role === 'staff' && user.departmentId) {
+        return {
+          isActive: true,
+          OR: [
+            { departmentId: user.departmentId },
+            { departmentId: null },
+          ],
+        };
+      }
+      if (user?.role === 'staff') {
+        return { isActive: true };
+      }
       return {};
     case 'tags':
       return {};
@@ -188,6 +218,185 @@ function required(value, name) {
   }
 }
 
+function normalizeSouthAfricanPhone(value) {
+  if (value === undefined || value === null || value === '') return value;
+  const digits = String(value).replace(/\D/g, '');
+  if (!digits) return '';
+  if (digits.startsWith('27')) return `+${digits}`;
+  if (digits.startsWith('0')) return `+27${digits.slice(1)}`;
+  return `+27${digits}`;
+}
+
+function combineDateAndHour(dateValue, hourValue = 0) {
+  const date = dateValue instanceof Date ? new Date(dateValue) : parseDateOnly(dateValue);
+  const numericHour = Number(hourValue || 0);
+  const hours = Math.trunc(numericHour);
+  const minutes = Math.round((numericHour - hours) * 60);
+  date.setUTCHours(hours, minutes, 0, 0);
+  return date;
+}
+
+function startOfDayUtc(value) {
+  const date = value instanceof Date ? new Date(value) : parseDateOnly(value);
+  date.setUTCHours(0, 0, 0, 0);
+  return date;
+}
+
+function diffHours(startAt, endAt) {
+  return (endAt.getTime() - startAt.getTime()) / (60 * 60 * 1000);
+}
+
+function roundToQuarter(value) {
+  return Math.round(value * 4) / 4;
+}
+
+function deriveTimeEntryFields(payload) {
+  const next = { ...payload };
+
+  if (next.startAt && !next.endAt && next.hours !== undefined) {
+    next.endAt = new Date(next.startAt.getTime() + Number(next.hours) * 60 * 60 * 1000);
+  }
+
+  if (!next.startAt && next.date && next.startHour !== undefined) {
+    next.startAt = combineDateAndHour(next.date, next.startHour);
+  }
+
+  if (!next.endAt && next.startAt && next.hours !== undefined) {
+    next.endAt = new Date(next.startAt.getTime() + Number(next.hours) * 60 * 60 * 1000);
+  }
+
+  if (next.startAt && next.endAt) {
+    const durationHours = diffHours(next.startAt, next.endAt);
+    if (!Number.isFinite(durationHours) || durationHours <= 0) {
+      throw new Error('endAt must be after startAt');
+    }
+    if (durationHours > ENTRY_MAX_DURATION_HOURS) {
+      throw new Error(`Time entry cannot exceed ${ENTRY_MAX_DURATION_HOURS} hours`);
+    }
+    next.date = startOfDayUtc(next.startAt);
+    next.startHour = roundToQuarter(next.startAt.getUTCHours() + next.startAt.getUTCMinutes() / 60);
+    next.hours = roundToQuarter(durationHours);
+  }
+
+  if (next.hours !== undefined) {
+    next.hours = Number(next.hours);
+  }
+
+  if (next.startHour !== undefined && next.startHour !== null) {
+    next.startHour = Number(next.startHour);
+  }
+
+  return next;
+}
+
+async function assignDefaultTimeEntryWindow(payload, ignoreId = null) {
+  if (payload.startAt || payload.endAt || !payload.userId || !payload.date || payload.hours === undefined) {
+    return payload;
+  }
+
+  const durationHours = Number(payload.hours);
+  if (!Number.isFinite(durationHours) || durationHours <= 0) {
+    throw new Error('hours is required');
+  }
+
+  const dayStart = startOfDayUtc(payload.date);
+  const dayEnd = new Date(dayStart);
+  dayEnd.setUTCDate(dayEnd.getUTCDate() + 1);
+
+  const latestEntry = await prisma.timeEntry.findFirst({
+    where: {
+      userId: payload.userId,
+      id: ignoreId ? { not: ignoreId } : undefined,
+      startAt: { gte: dayStart, lt: dayEnd },
+    },
+    orderBy: { endAt: 'desc' },
+  });
+
+  const startAt = latestEntry?.endAt
+    ? new Date(latestEntry.endAt)
+    : combineDateAndHour(dayStart, 9);
+  const endAt = new Date(startAt.getTime() + durationHours * 60 * 60 * 1000);
+
+  if (endAt > dayEnd) {
+    throw new Error('No available time slot remains on this day');
+  }
+
+  return deriveTimeEntryFields({
+    ...payload,
+    startAt,
+    endAt,
+  });
+}
+
+async function validateProjectAndClient(payload) {
+  if (payload.clientId) {
+    const client = await prisma.client.findUnique({ where: { id: payload.clientId } });
+    if (!client || !client.isActive) throw new Error('Selected client is not available');
+    payload.clientName = client.name;
+  } else if (payload.clientName === '') {
+    payload.clientName = null;
+  }
+
+  if (payload.projectId) {
+    const project = await prisma.project.findUnique({ where: { id: payload.projectId } });
+    if (!project || !project.isActive) throw new Error('Selected project is not available');
+    payload.projectName = project.name;
+    payload.clientId = project.clientId || payload.clientId || null;
+    payload.clientName = project.clientName || payload.clientName || null;
+    if (payload.billable === undefined) {
+      payload.billable = project.isBillableDefault;
+    }
+    if (!payload.departmentId && project.departmentId) {
+      payload.departmentId = project.departmentId;
+    }
+  } else if (payload.projectName === '') {
+    payload.projectName = null;
+  }
+}
+
+async function ensureEditableTimeEntry(existing) {
+  return existing;
+}
+
+async function assertNoTimeEntryOverlap(payload, ignoreId = null) {
+  return { payload, ignoreId };
+}
+
+async function writeActivityLog(user, action, entityType, entityId, details, departmentId) {
+  try {
+    await prisma.activityLog.create({
+      data: {
+        userId: user.id,
+        userName: user.fullName || user.email || 'Unknown',
+        action,
+        entityType,
+        entityId,
+        details,
+        departmentId: departmentId || user.departmentId || null,
+      },
+    });
+  } catch {
+    // Never block main flows on audit persistence.
+  }
+}
+
+function describeEntryChange(existing, payload) {
+  const beforeStart = existing.startAt?.toISOString() || '';
+  const beforeEnd = existing.endAt?.toISOString() || '';
+  const afterStart = payload.startAt?.toISOString() || beforeStart;
+  const afterEnd = payload.endAt?.toISOString() || beforeEnd;
+
+  if (beforeStart !== afterStart && beforeEnd === afterEnd) {
+    return { action: 'Entry Moved', details: `Moved "${existing.taskTitle || payload.taskTitle || 'Time Entry'}" to ${afterStart}` };
+  }
+
+  if (beforeStart === afterStart && beforeEnd !== afterEnd) {
+    return { action: 'Entry Resized', details: `Resized "${existing.taskTitle || payload.taskTitle || 'Time Entry'}" to ${roundToQuarter(diffHours(payload.startAt, payload.endAt))}h` };
+  }
+
+  return { action: 'Entry Updated', details: `Updated "${existing.taskTitle || payload.taskTitle || 'Time Entry'}"` };
+}
+
 async function handleCreate(resource, user, body) {
   const cfg = resourceConfig(resource);
   const payload = coerceDates(cfg.model, normalizeInput(body));
@@ -199,14 +408,28 @@ async function handleCreate(resource, user, body) {
     }
     payload.createdById = user.id;
     if (!payload.departmentId && user.departmentId) payload.departmentId = user.departmentId;
+    await validateProjectAndClient(payload);
   }
 
   if (cfg.model === 'timeEntry') {
     required(payload.userId, 'userId');
-    required(payload.date, 'date');
-    required(payload.hours, 'hours');
     if (!isSuperuser(user) && payload.userId !== user.id) throw new Error('Forbidden');
     if (!payload.departmentId && user.departmentId) payload.departmentId = user.departmentId;
+    const normalizedEntry = await assignDefaultTimeEntryWindow(deriveTimeEntryFields(payload));
+    required(normalizedEntry.startAt, 'startAt');
+    required(normalizedEntry.endAt, 'endAt');
+    await validateProjectAndClient(normalizedEntry);
+    await assertNoTimeEntryOverlap(normalizedEntry);
+    const record = await prisma[cfg.model].create({ data: normalizedEntry });
+    await writeActivityLog(
+      user,
+      'Entry Created',
+      'TimeEntry',
+      record.id,
+      `Created "${record.taskTitle || 'Time Entry'}" from ${record.startAt?.toISOString() || ''} to ${record.endAt?.toISOString() || ''}`,
+      record.departmentId
+    );
+    return serializeRecord(cfg.serialize, record);
   }
 
   if (cfg.model === 'timesheet') {
@@ -231,12 +454,29 @@ async function handleCreate(resource, user, body) {
     throw new Error('Forbidden');
   }
 
+  if (cfg.model === 'designation' && !isSuperuser(user)) {
+    throw new Error('Forbidden');
+  }
+
+  if (cfg.model === 'client' && !isSuperuser(user)) {
+    throw new Error('Forbidden');
+  }
+
+  if (cfg.model === 'project' && !(isSuperuser(user) || isAdmin(user))) {
+    throw new Error('Forbidden');
+  }
+
   if (cfg.model === 'tag' && !(isSuperuser(user) || isAdmin(user))) {
     throw new Error('Forbidden');
   }
 
   if (cfg.model === 'user' && !isSuperuser(user)) {
     throw new Error('Forbidden');
+  }
+
+  if (cfg.model === 'project') {
+    await validateProjectAndClient(payload);
+    if (!payload.departmentId && user.departmentId) payload.departmentId = user.departmentId;
   }
 
   const record = await prisma[cfg.model].create({ data: payload });
@@ -272,11 +512,36 @@ async function handleUpdate(resource, user, id, body) {
   }
 
   if (resource === 'departments' && !isSuperuser(user)) throw new Error('Forbidden');
+  if (resource === 'designations' && !isSuperuser(user)) throw new Error('Forbidden');
+  if (resource === 'clients' && !isSuperuser(user)) throw new Error('Forbidden');
+  if (resource === 'projects' && !(isSuperuser(user) || isAdmin(user))) throw new Error('Forbidden');
   if (resource === 'tags' && !(isSuperuser(user) || isAdmin(user))) throw new Error('Forbidden');
   if (resource === 'users' && !isSuperuser(user)) throw new Error('Forbidden');
   if (resource === 'activity-logs' && !(isSuperuser(user) || existing.userId === user.id)) throw new Error('Forbidden');
 
   const payload = coerceDates(cfg.model, normalizeInput(body));
+  if (cfg.model === 'task') {
+    await validateProjectAndClient(payload);
+  }
+
+  if (cfg.model === 'project') {
+    await validateProjectAndClient(payload);
+  }
+
+  if (cfg.model === 'timeEntry') {
+    await ensureEditableTimeEntry(existing);
+    const normalizedEntry = await assignDefaultTimeEntryWindow(deriveTimeEntryFields({
+      ...existing,
+      ...payload,
+    }), id);
+    await validateProjectAndClient(normalizedEntry);
+    await assertNoTimeEntryOverlap(normalizedEntry, id);
+    const record = await prisma[cfg.model].update({ where: { id }, data: normalizedEntry });
+    const change = describeEntryChange(existing, normalizedEntry);
+    await writeActivityLog(user, change.action, 'TimeEntry', record.id, change.details, record.departmentId);
+    return serializeRecord(cfg.serialize, record);
+  }
+
   const record = await prisma[cfg.model].update({ where: { id }, data: payload });
   return serializeRecord(cfg.serialize, record);
 }
@@ -294,6 +559,10 @@ async function handleDelete(resource, user, id) {
       throw new Error('Forbidden');
     } else if (resource === 'departments') {
       throw new Error('Forbidden');
+    } else if (resource === 'designations') {
+      throw new Error('Forbidden');
+    } else if (resource === 'clients') {
+      throw new Error('Forbidden');
     } else if (resource === 'users') {
       throw new Error('Forbidden');
     } else {
@@ -307,11 +576,46 @@ async function handleDelete(resource, user, id) {
     }
   }
 
+  if (resource === 'projects' && !(isSuperuser(user) || isAdmin(user))) {
+    throw new Error('Forbidden');
+  }
+
+  if (resource === 'time-entries') {
+    await ensureEditableTimeEntry(existing);
+  }
+
   const record = await prisma[cfg.model].delete({ where: { id } });
+  if (resource === 'time-entries') {
+    await writeActivityLog(
+      user,
+      'Entry Deleted',
+      'TimeEntry',
+      record.id,
+      `Deleted "${record.taskTitle || 'Time Entry'}"`,
+      record.departmentId
+    );
+  }
   return serializeRecord(cfg.serialize, record);
 }
 
-app.use(cors({ origin: env.frontendUrl, credentials: true }));
+app.use(
+  cors({
+    origin:
+      env.nodeEnv === 'development'
+        ? (origin, callback) => {
+            if (
+              !origin ||
+              /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)
+            ) {
+              callback(null, true);
+              return;
+            }
+            callback(null, env.frontendUrl);
+          }
+        : env.frontendUrl,
+    credentials: true,
+  })
+);
 app.use(express.json({ limit: '2mb' }));
 
 app.get('/health', (_req, res) => res.json({ ok: true }));
@@ -349,7 +653,7 @@ app.post('/api/auth/register', async (req, res) => {
         email,
         passwordHash,
         fullName: fullName || '',
-        phone: phone || '',
+        phone: normalizeSouthAfricanPhone(phone) || '',
         role: 'staff',
       },
     });
@@ -391,8 +695,10 @@ app.patch('/api/auth/me', requireAuth, async (req, res) => {
     const updated = await prisma.user.update({
       where: { id: req.authUser.id },
       data: {
-        phone: payload.phone ?? req.authUser.phone,
+        phone: payload.phone !== undefined ? normalizeSouthAfricanPhone(payload.phone) : req.authUser.phone,
         fullName: payload.fullName ?? req.authUser.fullName,
+        departmentId: payload.departmentId !== undefined ? payload.departmentId : req.authUser.departmentId,
+        designationId: payload.designationId !== undefined ? payload.designationId : req.authUser.designationId,
       },
     });
     return res.json(serializeRecord('user', updated));
@@ -448,6 +754,48 @@ app.post('/api/auth/reset-password', async (req, res) => {
     return res.json({ ok: true });
   } catch (error) {
     return sendError(res, 400, error.message || 'Password reset failed');
+  }
+});
+
+app.get('/api/calendar/entries', requireAuth, async (req, res) => {
+  try {
+    const { from, to, user_id: requestedUserId } = normalizeInput(req.query);
+    required(from, 'from');
+    required(to, 'to');
+
+    const fromDate = parseDateTime(from);
+    const toDate = parseDateTime(to);
+    if (!(fromDate instanceof Date) || Number.isNaN(fromDate.getTime())) {
+      throw new Error('Invalid from date');
+    }
+    if (!(toDate instanceof Date) || Number.isNaN(toDate.getTime())) {
+      throw new Error('Invalid to date');
+    }
+
+    const targetUserId = requestedUserId || req.authUser.id;
+    if (!isSuperuser(req.authUser) && targetUserId !== req.authUser.id) {
+      if (!(isAdmin(req.authUser) && req.authUser.departmentId)) {
+        throw new Error('Forbidden');
+      }
+      const targetUser = await prisma.user.findUnique({ where: { id: targetUserId } });
+      if (!targetUser || targetUser.departmentId !== req.authUser.departmentId) {
+        throw new Error('Forbidden');
+      }
+    }
+
+    const records = await prisma.timeEntry.findMany({
+      where: {
+        userId: targetUserId,
+        startAt: { lt: toDate },
+        endAt: { gt: fromDate },
+      },
+      orderBy: { startAt: 'asc' },
+    });
+
+    return res.json(serializeMany('timeEntry', records));
+  } catch (error) {
+    if (error.message === 'Forbidden') return sendError(res, 403, 'Forbidden');
+    return sendError(res, error.statusCode || 400, error.message || 'Calendar query failed');
   }
 });
 

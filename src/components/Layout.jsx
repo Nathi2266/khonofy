@@ -1,33 +1,38 @@
 import { Link, useLocation, Outlet } from 'react-router-dom';
+import { useState } from 'react';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import {
   LayoutDashboard, ClipboardList, Clock, Users,
-  CheckSquare, FileText, User, LogOut, ChevronRight,
-  CalendarDays, BarChart3, Tag, Target
+  CheckSquare, FileText, User, LogOut, UserRoundPlus,
+  CalendarDays, BarChart3, Tag, Target, FolderKanban
 } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
+import khonoImage from '@/assets/images/khono.png';
 
 const STAFF_NAV = [
-  { path: '/', label: 'My Dashboard', icon: LayoutDashboard },
-  { path: '/daily-log', label: 'Daily Task Log', icon: ClipboardList },
+  { path: '/', label: 'Dashboard', icon: LayoutDashboard },
+  { path: '/daily-log', label: 'Task Log', icon: ClipboardList },
   { path: '/calendar', label: 'Calendar', icon: CalendarDays },
-  { path: '/timesheets', label: 'My Timesheets', icon: Clock },
+  { path: '/timesheets', label: 'Timesheets', icon: Clock },
 ];
 
 const ADMIN_NAV = [
-  { path: '/', label: 'Team Dashboard', icon: LayoutDashboard },
+  { path: '/', label: 'Dashboard', icon: LayoutDashboard },
   { path: '/team', label: 'Team Management', icon: Users },
   { path: '/tasks', label: 'Task Management', icon: CheckSquare },
   { path: '/timesheets/review', label: 'Timesheet Review', icon: Clock },
   { path: '/admin-reports', label: 'Reports', icon: BarChart3 },
   { path: '/dept-summary', label: 'Hours vs Estimates', icon: Target },
+  { path: '/projects', label: 'Projects', icon: FolderKanban },
   { path: '/tags', label: 'Tag Management', icon: Tag },
 ];
 
 const SUPERUSER_NAV = [
-  { path: '/', label: 'Global Dashboard', icon: LayoutDashboard },
+  { path: '/', label: 'Dashboard', icon: LayoutDashboard },
+  { path: '/users', label: 'User Management', icon: UserRoundPlus },
   { path: '/audit-trail', label: 'Audit Trail', icon: FileText },
   { path: '/admin-reports', label: 'Reports', icon: BarChart3 },
+  { path: '/projects', label: 'Projects', icon: FolderKanban },
   { path: '/tags', label: 'Tag Management', icon: Tag },
 ];
 
@@ -37,33 +42,20 @@ function getNavItems(role) {
   return STAFF_NAV;
 }
 
-const ROLE_BADGE = {
-  superuser: 'bg-amber-100 text-amber-900 border-amber-200',
-  admin: 'bg-red-50 text-[#c10d00] border-red-200',
-  staff: 'bg-gray-100 text-black border-gray-200',
-};
-
-const ROLE_LABEL = { superuser: 'Super User', admin: 'Admin', staff: 'Staff' };
-
 export default function Layout() {
   const location = useLocation();
   const { data: user } = useCurrentUser();
-  const role = user?.role || 'staff';
-  const navItems = getNavItems(role);
+  const navItems = getNavItems(user?.role || 'staff');
+  const [showLogoutDialog, setShowLogoutDialog] = useState(false);
 
   return (
     <div className="flex h-screen bg-background overflow-hidden">
       <aside className="w-64 flex flex-col flex-shrink-0 border-r border-sidebar-border bg-sidebar">
-        <div className="h-16 flex items-center px-4 border-b border-sidebar-border flex-shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center flex-shrink-0">
-              <span className="text-white font-bold text-sm">K</span>
-            </div>
-            <div>
-              <p className="text-sidebar-foreground font-semibold text-base leading-tight">Khonofy</p>
-              <p className="text-sidebar-foreground/50 text-xs">Time &amp; Task Tracking</p>
-            </div>
-          </div>
+        <div className="flex flex-col items-center px-4 py-4 border-b border-sidebar-border flex-shrink-0">
+          <img src={khonoImage} alt="KHONOFY" className="w-36 h-auto select-none pointer-events-none" />
+          <p className="mt-1 text-sidebar-foreground font-semibold text-sm text-center leading-tight">
+            Welcome to Khonofy
+          </p>
         </div>
 
         <nav className="flex-1 py-3 overflow-y-auto space-y-0.5 px-2">
@@ -82,7 +74,6 @@ export default function Layout() {
               >
                 <Icon className="w-5 h-5 flex-shrink-0" />
                 <span className="text-sm font-medium">{item.label}</span>
-                {active && <ChevronRight className="w-4 h-4 ml-auto opacity-70" />}
               </Link>
             );
           })}
@@ -103,37 +94,47 @@ export default function Layout() {
         </nav>
 
         <div className="border-t border-sidebar-border p-3 flex-shrink-0">
-          <div className="space-y-2">
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-full bg-primary/30 flex items-center justify-center flex-shrink-0">
-                <span className="text-white text-sm font-semibold">
-                  {(user?.full_name || user?.email || '?')[0].toUpperCase()}
-                </span>
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sidebar-foreground text-sm font-medium truncate leading-tight">
-                  {user?.full_name || 'User'}
-                </p>
-                <p className="text-sidebar-foreground/50 text-xs truncate">{user?.email || ''}</p>
-              </div>
-              <button
-                onClick={() => base44.auth.logout()}
-                className="text-sidebar-foreground/50 hover:text-sidebar-foreground transition-colors p-1 rounded"
-                aria-label="Log out"
-              >
-                <LogOut className="w-4 h-4" />
-              </button>
-            </div>
-            <span className={`inline-flex text-xs font-medium px-2 py-0.5 rounded-full border ${ROLE_BADGE[role] || ROLE_BADGE.staff}`}>
-              {ROLE_LABEL[role] || 'Staff'}
-            </span>
-          </div>
+          <button
+            onClick={() => setShowLogoutDialog(true)}
+            className="w-full flex items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-sm font-medium text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors"
+            aria-label="Log out"
+          >
+            <LogOut className="w-4 h-4" />
+            Logout
+          </button>
         </div>
       </aside>
 
       <main className="flex-1 overflow-y-auto bg-background">
         <Outlet />
       </main>
+
+      {showLogoutDialog ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
+          <div className="w-full max-w-md rounded-xl border border-sidebar-border bg-sidebar p-6 text-sidebar-foreground shadow-xl">
+            <h2 className="text-center text-lg font-semibold">Log out?</h2>
+            <p className="mt-2 text-center text-sm text-sidebar-foreground/70">
+              Are you sure you want to log out of Khonofy?
+            </p>
+            <div className="mt-6 flex items-center justify-between gap-1.5">
+              <button
+                type="button"
+                className="inline-flex items-center justify-center rounded-md border border-sidebar-border bg-sidebar px-3.5 py-2 text-sm font-medium text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                onClick={() => setShowLogoutDialog(false)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="inline-flex items-center justify-center rounded-md bg-destructive px-3.5 py-2 text-sm font-medium text-destructive-foreground hover:bg-destructive/90"
+                onClick={() => base44.auth.logout()}
+              >
+                Log out
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

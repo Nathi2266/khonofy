@@ -8,7 +8,7 @@ import PageHeader from '@/components/PageHeader';
 import PageShell from '@/components/PageShell';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { CheckCircle2, XCircle, Clock, ChevronDown, User, Calendar } from 'lucide-react';
+import { CheckCircle2, XCircle, Clock, ChevronDown, Calendar } from 'lucide-react';
 
 const STATUS_TABS = ['pending', 'approved', 'rejected', 'all'];
 

@@ -3,6 +3,8 @@ import { base44 } from '@/api/base44Client';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, CartesianGrid } from 'recharts';
 import { Users, Clock, Target, TrendingUp, AlertCircle } from 'lucide-react';
+import PageHeader from '@/components/PageHeader';
+import PageShell from '@/components/PageShell';
 
 export default function DeptHeadSummary() {
   const { data: user } = useCurrentUser();
@@ -53,11 +55,11 @@ export default function DeptHeadSummary() {
   );
 
   return (
-    <div className="p-6 max-w-5xl mx-auto space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Hours vs Estimates</h1>
-        <p className="text-muted-foreground text-sm mt-1">Department-wide breakdown of logged hours against task estimates</p>
-      </div>
+    <PageShell>
+      <PageHeader
+        title="Hours vs Estimates"
+        description="Department-wide breakdown of logged hours against task estimates"
+      />
 
       {/* Summary cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -141,6 +143,6 @@ export default function DeptHeadSummary() {
           })}
         </div>
       </div>
-    </div>
+    </PageShell>
   );
 }

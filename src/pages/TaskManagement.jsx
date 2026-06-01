@@ -31,7 +31,18 @@ const STATUS_COLORS = {
   blocked: 'bg-red-100 text-red-600',
 };
 
-const EMPTY_FORM = { title: '', description: '', due_date: '', priority: 'medium', status: 'todo', assigned_to: '', assigned_to_name: '', estimated_hours: '' };
+const EMPTY_FORM = {
+  title: '',
+  description: '',
+  due_date: '',
+  priority: 'medium',
+  status: 'todo',
+  assigned_to: '',
+  assigned_to_name: '',
+  estimated_hours: '',
+  project_id: '',
+  project_name: '',
+};
 
 export default function TaskManagement() {
   const { data: user } = useCurrentUser();
@@ -59,6 +70,17 @@ export default function TaskManagement() {
     queryFn: () => user?.department_id
       ? base44.entities.User.filter({ department_id: user.department_id })
       : base44.entities.User.list(),
+    enabled: !!user,
+  });
+
+  const { data: projects = [] } = useQuery({
+    queryKey: ['taskProjects', user?.department_id, user?.role],
+    queryFn: () => {
+      if (!user) return [];
+      if (user.role === 'superuser') return base44.entities.Project.list();
+      if (user.department_id) return base44.entities.Project.filter({ department_id: user.department_id });
+      return base44.entities.Project.list();
+    },
     enabled: !!user,
   });
 
@@ -100,6 +122,8 @@ export default function TaskManagement() {
       assigned_to: task.assigned_to || '',
       assigned_to_name: task.assigned_to_name || '',
       estimated_hours: task.estimated_hours || '',
+      project_id: task.project_id || '',
+      project_name: task.project_name || '',
     });
     setEditingTask(task);
     setShowForm(true);
@@ -123,6 +147,15 @@ export default function TaskManagement() {
   const handleAssigneeChange = (userId) => {
     const member = staffUsers.find(u => u.id === userId);
     setForm({ ...form, assigned_to: userId, assigned_to_name: member?.full_name || '' });
+  };
+
+  const handleProjectChange = (projectId) => {
+    const project = projects.find((item) => item.id === projectId);
+    setForm({
+      ...form,
+      project_id: projectId,
+      project_name: project?.name || '',
+    });
   };
 
   const filtered = tasks.filter(t => {
@@ -258,6 +291,21 @@ export default function TaskManagement() {
                 <label className="text-sm font-medium mb-1.5 block">Est. Hours</label>
                 <Input type="number" placeholder="8" min="0" value={form.estimated_hours} onChange={(e) => setForm({ ...form, estimated_hours: e.target.value })} />
               </div>
+            </div>
+            <div>
+              <label className="text-sm font-medium mb-1.5 block">Project</label>
+              <select
+                className="w-full text-sm border border-border rounded-lg px-3 py-2 bg-background"
+                value={form.project_id}
+                onChange={(e) => handleProjectChange(e.target.value)}
+              >
+                <option value="">No project</option>
+                {projects.map((project) => (
+                  <option key={project.id} value={project.id}>
+                    {project.name}
+                  </option>
+                ))}
+              </select>
             </div>
             <div>
               <label className="text-sm font-medium mb-1.5 block">Assign To</label>

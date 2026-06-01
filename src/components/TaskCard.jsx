@@ -1,4 +1,3 @@
-import { Badge } from '@/components/ui/badge';
 import { Calendar, Clock, User } from 'lucide-react';
 
 const PRIORITY_STYLES = {

@@ -10,8 +10,9 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import {
-  Clock, Plus, Calendar, CheckCircle2, ChevronDown, BookmarkPlus, Layers, Trash2
+  Plus, CheckCircle2, ChevronDown, BookmarkPlus, Layers, Trash2
 } from 'lucide-react';
+import { addHours } from 'date-fns';
 
 const STATUS_COLORS = {
   todo: 'bg-slate-100 text-slate-600',
@@ -27,13 +28,13 @@ export default function DailyTaskLog() {
 
   // Single task log
   const [selectedTask, setSelectedTask] = useState(null);
-  const [logForm, setLogForm] = useState({ hours: '', description: '', date: today, tag_id: '', tag_name: '', tag_color: '', saveAsTemplate: false });
+  const [logForm, setLogForm] = useState({ hours: '', description: '', date: today, start_time: '09:00', project_id: '', project_name: '', client_id: '', client_name: '', billable: false, tag_id: '', tag_name: '', tag_color: '', saveAsTemplate: false });
   const [expandedTask, setExpandedTask] = useState(null);
 
   // Bulk select
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [showBulkLog, setShowBulkLog] = useState(false);
-  const [bulkForm, setBulkForm] = useState({ hours: '', description: '', date: today, tag_id: '', tag_name: '', tag_color: '' });
+  const [bulkForm, setBulkForm] = useState({ hours: '', description: '', date: today, start_time: '09:00', project_id: '', project_name: '', client_id: '', client_name: '', billable: false, tag_id: '', tag_name: '', tag_color: '' });
 
   // Templates
   const [showTemplates, setShowTemplates] = useState(false);
@@ -61,6 +62,17 @@ export default function DailyTaskLog() {
     queryFn: () => base44.entities.Tag.list(),
   });
 
+  const { data: projects = [] } = useQuery({
+    queryKey: ['dailyLogProjects', user?.department_id, user?.role],
+    queryFn: () => {
+      if (!user) return [];
+      if (user.role === 'superuser') return base44.entities.Project.list();
+      if (user.department_id) return base44.entities.Project.filter({ department_id: user.department_id });
+      return base44.entities.Project.filter({ is_active: true });
+    },
+    enabled: !!user,
+  });
+
   const { data: templates = [] } = useQuery({
     queryKey: ['templates', user?.id],
     queryFn: () => base44.entities.TaskTemplate.filter({ user_id: user.id }),
@@ -72,6 +84,9 @@ export default function DailyTaskLog() {
     onSuccess: async (entry) => {
       queryClient.invalidateQueries({ queryKey: ['timeEntries'] });
       queryClient.invalidateQueries({ queryKey: ['allMyEntries'] });
+      queryClient.invalidateQueries({ queryKey: ['todayEntries'] });
+      queryClient.invalidateQueries({ queryKey: ['calendarEntries'] });
+      queryClient.invalidateQueries({ queryKey: ['weekEntries'] });
       if (user) await logActivity(user, 'Logged time', 'TimeEntry', entry.id, `${logForm.hours}h on "${selectedTask?.title}"`);
       // Save template if checked
       if (logForm.saveAsTemplate && selectedTask) {
@@ -87,7 +102,7 @@ export default function DailyTaskLog() {
         queryClient.invalidateQueries({ queryKey: ['templates'] });
       }
       setSelectedTask(null);
-      setLogForm({ hours: '', description: '', date: today, tag_id: '', tag_name: '', tag_color: '', saveAsTemplate: false });
+      setLogForm({ hours: '', description: '', date: today, start_time: '09:00', project_id: '', project_name: '', client_id: '', client_name: '', billable: false, tag_id: '', tag_name: '', tag_color: '', saveAsTemplate: false });
     },
   });
 
@@ -101,8 +116,15 @@ export default function DailyTaskLog() {
           user_id: user.id,
           user_name: user.full_name,
           date: bulkForm.date,
+          start_at: `${bulkForm.date}T${bulkForm.start_time}:00`,
+          end_at: addHours(new Date(`${bulkForm.date}T${bulkForm.start_time}:00`), parseFloat(bulkForm.hours)).toISOString(),
           hours: parseFloat(bulkForm.hours),
           description: bulkForm.description,
+          project_id: bulkForm.project_id,
+          project_name: bulkForm.project_name,
+          client_id: bulkForm.client_id,
+          client_name: bulkForm.client_name,
+          billable: bulkForm.billable,
           tag_id: bulkForm.tag_id,
           tag_name: bulkForm.tag_name,
           tag_color: bulkForm.tag_color,
@@ -113,10 +135,13 @@ export default function DailyTaskLog() {
     onSuccess: async () => {
       queryClient.invalidateQueries({ queryKey: ['timeEntries'] });
       queryClient.invalidateQueries({ queryKey: ['allMyEntries'] });
+      queryClient.invalidateQueries({ queryKey: ['todayEntries'] });
+      queryClient.invalidateQueries({ queryKey: ['calendarEntries'] });
+      queryClient.invalidateQueries({ queryKey: ['weekEntries'] });
       if (user) await logActivity(user, 'Bulk logged time', 'TimeEntry', '', `${bulkForm.hours}h × ${selectedIds.size} tasks`);
       setSelectedIds(new Set());
       setShowBulkLog(false);
-      setBulkForm({ hours: '', description: '', date: today, tag_id: '', tag_name: '', tag_color: '' });
+      setBulkForm({ hours: '', description: '', date: today, start_time: '09:00', project_id: '', project_name: '', client_id: '', client_name: '', billable: false, tag_id: '', tag_name: '', tag_color: '' });
     },
   });
 
@@ -140,16 +165,37 @@ export default function DailyTaskLog() {
     else setBulkForm({ ...bulkForm, tag_id: tagId, tag_name: tag?.name || '', tag_color: tag?.color || '' });
   };
 
+  const handleProjectChange = (projectId, isLog = true) => {
+    const project = projects.find((item) => item.id === projectId);
+    const nextState = {
+      project_id: projectId,
+      project_name: project?.name || '',
+      client_id: project?.client_id || '',
+      client_name: project?.client_name || '',
+      billable: Boolean(project?.is_billable_default),
+    };
+    if (isLog) setLogForm({ ...logForm, ...nextState });
+    else setBulkForm({ ...bulkForm, ...nextState });
+  };
+
   const handleLogTime = () => {
     if (!logForm.hours || !selectedTask) return;
+    const startAt = new Date(`${logForm.date}T${logForm.start_time}:00`);
     logTimeMutation.mutate({
       task_id: selectedTask.id,
       task_title: selectedTask.title,
       user_id: user.id,
       user_name: user.full_name,
       date: logForm.date,
+      start_at: startAt.toISOString(),
+      end_at: addHours(startAt, parseFloat(logForm.hours)).toISOString(),
       hours: parseFloat(logForm.hours),
       description: logForm.description,
+      project_id: logForm.project_id,
+      project_name: logForm.project_name,
+      client_id: logForm.client_id,
+      client_name: logForm.client_name,
+      billable: logForm.billable,
       tag_id: logForm.tag_id,
       tag_name: logForm.tag_name,
       tag_color: logForm.tag_color,
@@ -162,6 +208,11 @@ export default function DailyTaskLog() {
       ...f,
       description: tpl.description || '',
       hours: tpl.estimated_hours ? String(tpl.estimated_hours) : f.hours,
+      project_id: tpl.project_id || '',
+      project_name: tpl.project_name || '',
+      client_id: tpl.client_id || '',
+      client_name: tpl.client_name || '',
+      billable: Boolean(tpl.billable),
       tag_id: tpl.tag_id || '',
       tag_name: tpl.tag_name || '',
       tag_color: tpl.tag_color || '',
@@ -306,7 +357,7 @@ export default function DailyTaskLog() {
                   </div>
 
                   <div className="flex items-center gap-2 flex-shrink-0">
-                    <Button size="sm" className="gap-1.5 h-8" onClick={(e) => { e.stopPropagation(); setSelectedTask(task); setLogForm({ hours: '', description: '', date: today, tag_id: '', tag_name: '', tag_color: '', saveAsTemplate: false }); }}>
+                    <Button size="sm" className="gap-1.5 h-8" onClick={(e) => { e.stopPropagation(); setSelectedTask(task); setLogForm({ hours: '', description: '', date: today, start_time: '09:00', project_id: task.project_id || '', project_name: task.project_name || '', client_id: '', client_name: '', billable: false, tag_id: '', tag_name: '', tag_color: '', saveAsTemplate: false }); }}>
                       <Plus className="w-3.5 h-3.5" /> Log Time
                     </Button>
                     <ChevronDown
@@ -403,6 +454,19 @@ export default function DailyTaskLog() {
                 <Input type="number" step="0.5" min="0.5" max="24" placeholder="e.g. 2.5" value={logForm.hours} onChange={(e) => setLogForm({ ...logForm, hours: e.target.value })} />
               </div>
               <div>
+                <label className="text-sm font-medium text-foreground mb-1.5 block">Start Time</label>
+                <Input type="time" value={logForm.start_time} onChange={(e) => setLogForm({ ...logForm, start_time: e.target.value })} />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-sm font-medium text-foreground mb-1.5 block">Project</label>
+                <select className="w-full text-sm border border-border rounded-lg px-3 py-2 bg-background" value={logForm.project_id} onChange={(e) => handleProjectChange(e.target.value, true)}>
+                  <option value="">No project</option>
+                  {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                </select>
+              </div>
+              <div>
                 <label className="text-sm font-medium text-foreground mb-1.5 block">Tag</label>
                 <select className="w-full text-sm border border-border rounded-lg px-3 py-2 bg-background" value={logForm.tag_id} onChange={(e) => handleTagChange(e.target.value, true)}>
                   <option value="">No tag</option>
@@ -462,6 +526,19 @@ export default function DailyTaskLog() {
               <div>
                 <label className="text-sm font-medium mb-1.5 block">Hours (per task)</label>
                 <Input type="number" step="0.5" min="0.5" placeholder="e.g. 2" value={bulkForm.hours} onChange={(e) => setBulkForm({ ...bulkForm, hours: e.target.value })} />
+              </div>
+              <div>
+                <label className="text-sm font-medium mb-1.5 block">Start Time</label>
+                <Input type="time" value={bulkForm.start_time} onChange={(e) => setBulkForm({ ...bulkForm, start_time: e.target.value })} />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3 pt-1">
+              <div>
+                <label className="text-sm font-medium mb-1.5 block">Project</label>
+                <select className="w-full text-sm border border-border rounded-lg px-3 py-2 bg-background" value={bulkForm.project_id} onChange={(e) => handleProjectChange(e.target.value, false)}>
+                  <option value="">No project</option>
+                  {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                </select>
               </div>
               <div>
                 <label className="text-sm font-medium mb-1.5 block">Tag</label>

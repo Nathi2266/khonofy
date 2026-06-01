@@ -18,8 +18,10 @@ import AuditTrail from './pages/AuditTrail';
 import Profile from './pages/Profile';
 import CalendarView from './pages/CalendarView';
 import TagManagement from './pages/TagManagement';
+import UserManagement from './pages/UserManagement';
 import AdminReports from './pages/AdminReports';
 import DeptHeadSummary from './pages/DeptHeadSummary';
+import ProjectManagement from './pages/ProjectManagement';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import ForgotPassword from './pages/ForgotPassword';
@@ -50,6 +52,8 @@ function App() {
                   <Route path="/profile" element={<Profile />} />
                   <Route path="/calendar" element={<CalendarView />} />
                   <Route path="/tags" element={<TagManagement />} />
+                  <Route path="/projects" element={<ProjectManagement />} />
+                  <Route path="/users" element={<UserManagement />} />
                   <Route path="/admin-reports" element={<AdminReports />} />
         <Route path="/dept-summary" element={<DeptHeadSummary />} />
                 </Route>

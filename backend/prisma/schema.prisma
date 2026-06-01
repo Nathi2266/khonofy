@@ -42,6 +42,7 @@ model User {
   fullName              String?
   role                  UserRole @default(staff)
   departmentId          String?
+  designationId         String?
   phone                 String?
   resetToken            String?
   resetTokenExpiresAt    DateTime?
@@ -58,6 +59,38 @@ model Department {
   updatedAt   DateTime @updatedAt
 }
 
+model Designation {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  adminId     String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Client {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Project {
+  id                String   @id @default(cuid())
+  name              String
+  description       String?
+  clientId          String?
+  clientName        String?
+  departmentId      String?
+  color             String?
+  isBillableDefault Boolean  @default(false)
+  isActive          Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
 model Task {
   id               String      @id @default(cuid())
   title            String
@@ -67,6 +100,8 @@ model Task {
   status           TaskStatus    @default(todo)
   assignedTo       String?
   assignedToName   String?
+  projectId        String?
+  projectName      String?
   departmentId     String?
   estimatedHours   Float?
   createdById      String?
@@ -82,11 +117,18 @@ model TimeEntry {
   userName      String?
   date          DateTime
   startHour     Float?
+  startAt       DateTime?
+  endAt         DateTime?
   hours         Float
   description   String?
+  projectId     String?
+  projectName   String?
+  clientId      String?
+  clientName    String?
   tagId         String?
   tagName       String?
   tagColor      String?
+  billable      Boolean  @default(false)
   timesheetId   String?
   departmentId  String?
   createdAt     DateTime @default(now())

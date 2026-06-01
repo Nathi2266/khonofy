@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import StatsCard from '@/components/StatsCard';
-import { Clock, Users, TrendingUp, CheckSquare, CalendarDays } from 'lucide-react';
+import { Clock, Users, TrendingUp, CalendarDays } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import PageHeader from '@/components/PageHeader';

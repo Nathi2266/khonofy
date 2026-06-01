@@ -24,10 +24,10 @@ export const AuthProvider = ({ children }) => {
       setAuthChecked(true);
       setIsLoadingAuth(false);
       const status = error?.status ?? error?.response?.status;
-      if (status !== 401) {
+      if (status !== 401 && status !== 403) {
         setAuthError({
           type: 'auth_required',
-          message: error.message || 'Authentication required',
+          message: error?.message || error?.response?.data?.message || 'Authentication required',
         });
       }
     }
