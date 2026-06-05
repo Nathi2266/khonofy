@@ -37,7 +37,7 @@ enum TimesheetStatus {
 
 model User {
   id                    String   @id @default(cuid())
-  email                 String   @unique
+  email                 String
   passwordHash          String
   fullName              String?
   profileImageUrl       String?
@@ -53,6 +53,8 @@ model User {
   updatedAt             DateTime @updatedAt
   admin                 User?    @relation("AdminStaff", fields: [adminId], references: [id])
   staff                 User[]   @relation("AdminStaff")
+
+  @@index([email])
 }
 
 model Department {

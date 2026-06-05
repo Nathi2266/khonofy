@@ -129,6 +129,12 @@ const ai = {
       method: 'POST',
       body: { ticketDraft },
     }),
+  scanUserImport: (payload) =>
+    request('/api/ai/scan-user-import', {
+      method: 'POST',
+      body: payload,
+      showGlobalLoader: false,
+    }),
 };
 
 const media = {

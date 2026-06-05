@@ -1,13 +1,23 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
-import { parseUserImportFile, validateImportRows } from '@/lib/user-import';
+import {
+  prepareImportScanPayload,
+  ensureImportTagsForRows,
+  validateImportRows,
+  getPendingImportTags,
+  formatPendingImportTagsSummary,
+  isSupportedImportFile,
+  IMPORT_FILE_ACCEPT,
+  IMPORT_FILE_LABEL,
+} from '@/lib/user-import';
 import { Button } from '@/components/ui/button';
 import PageHeader from '@/components/PageHeader';
 import PageShell from '@/components/PageShell';
 import SectionLoader from '@/components/SectionLoader';
 import { Input } from '@/components/ui/input';
+import { toast } from 'sonner';
 import {
   Select,
   SelectContent,
@@ -23,7 +33,8 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog';
-import { BadgeCheck, Users, Plus, UserCog, Shield, Crown, Search, ChevronDown, Upload, FileText } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
+import { BadgeCheck, Users, Plus, UserCog, Shield, Crown, Search, ChevronDown, Upload, FileText, Sparkles, Eye, EyeOff, Pencil, Trash2, Info } from 'lucide-react';
 
 /**
  * @typedef {Object} CreateUserPayload
@@ -55,6 +66,8 @@ import { BadgeCheck, Users, Plus, UserCog, Shield, Crown, Search, ChevronDown, U
  * @property {Array<{
  *   fullName: string,
  *   email: string,
+ *   department: string,
+ *   designation: string,
  *   departmentId: string | null,
  *   designationId: string | null,
  * }>} rows
@@ -63,6 +76,13 @@ import { BadgeCheck, Users, Plus, UserCog, Shield, Crown, Search, ChevronDown, U
  */
 
 const PAGE_SIZE = 10;
+const BULK_NO_CHANGE = '__no_change__';
+
+const EMPTY_BULK_EDIT = {
+  role: BULK_NO_CHANGE,
+  department_id: BULK_NO_CHANGE,
+  designation_id: BULK_NO_CHANGE,
+};
 
 const EMPTY_FORM = {
   email: '',
@@ -118,6 +138,26 @@ function TableSearch({ value, onChange, placeholder }) {
         onChange={(e) => onChange(e.target.value)}
       />
     </div>
+  );
+}
+
+/**
+ * @param {{
+ *   checked: boolean,
+ *   indeterminate?: boolean,
+ *   onCheckedChange: (checked: boolean | 'indeterminate') => void,
+ *   ariaLabel: string,
+ * }} props
+ */
+function UserSelectionCheckbox({ checked, indeterminate = false, onCheckedChange, ariaLabel }) {
+  return (
+    <Checkbox
+      checked={indeterminate ? 'indeterminate' : checked}
+      onCheckedChange={onCheckedChange}
+      aria-label={ariaLabel}
+      onClick={(event) => event.stopPropagation()}
+      onKeyDown={(event) => event.stopPropagation()}
+    />
   );
 }
 
@@ -250,6 +290,36 @@ function UserTableSection({ title, description, icon: Icon, search, children }) 
   );
 }
 
+function PasswordField({ id, value, onChange, placeholder, className }) {
+  const [showPassword, setShowPassword] = useState(false);
+
+  return (
+    <div className="relative">
+      <Input
+        id={id}
+        type={showPassword ? 'text' : 'password'}
+        placeholder={placeholder}
+        value={value}
+        onChange={onChange}
+        className={`pr-10 ${className || ''}`}
+        autoComplete="new-password"
+      />
+      <button
+        type="button"
+        onClick={() => setShowPassword((prev) => !prev)}
+        className="absolute right-3 top-1/2 z-10 flex h-8 w-8 -translate-y-1/2 items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+        aria-label={showPassword ? 'Hide password' : 'Show password'}
+      >
+        {showPassword ? (
+          <EyeOff className="h-4 w-4 shrink-0" aria-hidden="true" />
+        ) : (
+          <Eye className="h-4 w-4 shrink-0" aria-hidden="true" />
+        )}
+      </button>
+    </div>
+  );
+}
+
 export default function UserManagement() {
   const { data: currentUser } = useCurrentUser();
   const queryClient = useQueryClient();
@@ -274,8 +344,18 @@ export default function UserManagement() {
   const [importError, setImportError] = useState('');
   const [importFileName, setImportFileName] = useState('');
   const [importResult, setImportResult] = useState(null);
-  const [isParsingImport, setIsParsingImport] = useState(false);
+  const [isAiScanning, setIsAiScanning] = useState(false);
+  const [aiScanComplete, setAiScanComplete] = useState(false);
+  const [aiScanSummary, setAiScanSummary] = useState('');
+  const [pendingTagsSummary, setPendingTagsSummary] = useState('');
+  const [importSuccessOverlay, setImportSuccessOverlay] = useState('');
+  const [isImportDragging, setIsImportDragging] = useState(false);
+  const [selectedUserIds, setSelectedUserIds] = useState([]);
+  const [showBulkEdit, setShowBulkEdit] = useState(false);
+  const [showBulkDelete, setShowBulkDelete] = useState(false);
+  const [bulkEditForm, setBulkEditForm] = useState(EMPTY_BULK_EDIT);
   const importFileRef = useRef(null);
+  const importFileStateRef = useRef(null);
 
   const { data: users = [], isLoading } = useQuery({
     queryKey: ['users'],
@@ -374,14 +454,19 @@ export default function UserManagement() {
     return filteredAdminUsers.slice(start, start + PAGE_SIZE);
   }, [filteredAdminUsers, safeAdminPage]);
 
-  const existingEmails = useMemo(
-    () => new Set(users.map((user) => user.email?.trim().toLowerCase()).filter(Boolean)),
-    [users],
-  );
-
   const validImportRows = useMemo(
     () => importRows.filter((row) => row.valid),
     [importRows],
+  );
+
+  const selectedUsers = useMemo(
+    () => users.filter((user) => selectedUserIds.includes(user.id)),
+    [users, selectedUserIds],
+  );
+
+  const deletableSelectedUserIds = useMemo(
+    () => selectedUserIds.filter((userId) => userId !== currentUser?.id),
+    [selectedUserIds, currentUser?.id],
   );
 
   const staffCountByAdmin = useMemo(() => {
@@ -423,8 +508,40 @@ export default function UserManagement() {
      */
     mutationFn: async (variables) => {
       const { rows, password, role } = variables;
-      const result = { created: 0, failed: [] };
-      for (const row of rows) {
+      const [freshDepartments, freshDesignations] = await Promise.all([
+        base44.entities.Department.list(),
+        base44.entities.Designation.list(),
+      ]);
+
+      const findDepartmentByName = async (name) => {
+        const key = name.trim().toLowerCase();
+        const cached = freshDepartments.find((item) => item.name.trim().toLowerCase() === key);
+        if (cached) return cached;
+        const latest = await base44.entities.Department.list();
+        return latest.find((item) => item.name.trim().toLowerCase() === key) || null;
+      };
+
+      const findDesignationByName = async (name) => {
+        const key = name.trim().toLowerCase();
+        const cached = freshDesignations.find((item) => item.name.trim().toLowerCase() === key);
+        if (cached) return cached;
+        const latest = await base44.entities.Designation.list();
+        return latest.find((item) => item.name.trim().toLowerCase() === key) || null;
+      };
+
+      const tagContext = await ensureImportTagsForRows(rows, freshDepartments, freshDesignations, {
+        createDepartment: (data) => base44.entities.Department.create(data),
+        createDesignation: (data) => base44.entities.Designation.create(data),
+        findDepartmentByName,
+        findDesignationByName,
+      });
+      const validatedRows = validateImportRows(rows, {
+        departments: tagContext.departments,
+        designations: tagContext.designations,
+      }).filter((row) => row.valid);
+
+      const result = { created: 0, failed: [], createdTags: tagContext };
+      for (const row of validatedRows) {
         try {
           await base44.entities.User.create({
             email: row.email.trim(),
@@ -445,10 +562,33 @@ export default function UserManagement() {
       return result;
     },
     onSuccess: async (result) => {
-      await queryClient.invalidateQueries({ queryKey: ['users'] });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['users'] }),
+        queryClient.invalidateQueries({ queryKey: ['departments'] }),
+        queryClient.invalidateQueries({ queryKey: ['designations'] }),
+      ]);
+
+      if (result.created > 0) {
+        closeImport();
+        const failedNote = result.failed.length
+          ? ` ${result.failed.length} could not be created.`
+          : '';
+        setImportSuccessOverlay(
+          `Successfully created ${result.created} user${result.created === 1 ? '' : 's'}.${failedNote}`,
+        );
+        return;
+      }
+
       setImportResult(result);
+      setImportError('No users were created. Check the preview for errors and try again.');
     },
   });
+
+  useEffect(() => {
+    if (!importSuccessOverlay) return undefined;
+    const timer = window.setTimeout(() => setImportSuccessOverlay(''), 2000);
+    return () => window.clearTimeout(timer);
+  }, [importSuccessOverlay]);
 
   const updateUserProfile = useMutation({
     /** @param {UpdateUserProfilePayload} variables */
@@ -461,6 +601,55 @@ export default function UserManagement() {
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['users'] });
+    },
+  });
+
+  const bulkUpdateUsers = useMutation({
+    /** @param {{ userIds: string[], updates: Record<string, string | null> }} variables */
+    mutationFn: async (variables) => {
+      const { userIds, updates } = variables;
+      for (const userId of userIds) {
+        await base44.entities.User.update(userId, updates);
+      }
+      return userIds.length;
+    },
+    onSuccess: async (updatedCount) => {
+      await queryClient.invalidateQueries({ queryKey: ['users'] });
+      setShowBulkEdit(false);
+      setBulkEditForm(EMPTY_BULK_EDIT);
+      setSelectedUserIds([]);
+      toast.success(`Updated ${updatedCount} user${updatedCount === 1 ? '' : 's'}.`);
+    },
+  });
+
+  const bulkDeleteUsers = useMutation({
+    /** @param {string[]} userIds */
+    mutationFn: async (userIds) => {
+      const result = { deleted: 0, failed: [] };
+      for (const userId of userIds) {
+        try {
+          await base44.entities.User.delete(userId);
+          result.deleted += 1;
+        } catch (error) {
+          result.failed.push({
+            userId,
+            message: error instanceof Error ? error.message : 'Delete failed',
+          });
+        }
+      }
+      return result;
+    },
+    onSuccess: async (result) => {
+      await queryClient.invalidateQueries({ queryKey: ['users'] });
+      setShowBulkDelete(false);
+      setSelectedUserIds([]);
+      setExpandedUserId(null);
+      if (result.deleted > 0) {
+        toast.success(`Deleted ${result.deleted} user${result.deleted === 1 ? '' : 's'}.`);
+      }
+      if (result.failed.length > 0) {
+        toast.error(`${result.failed.length} user${result.failed.length === 1 ? '' : 's'} could not be deleted.`);
+      }
     },
   });
 
@@ -477,6 +666,12 @@ export default function UserManagement() {
     setImportError('');
     setImportFileName('');
     setImportResult(null);
+    setIsAiScanning(false);
+    setAiScanComplete(false);
+    setAiScanSummary('');
+    setPendingTagsSummary('');
+    setIsImportDragging(false);
+    importFileStateRef.current = null;
   };
 
   const closeImport = () => {
@@ -487,37 +682,110 @@ export default function UserManagement() {
     setImportError('');
     setImportFileName('');
     setImportResult(null);
-    setIsParsingImport(false);
+    setIsAiScanning(false);
+    setAiScanComplete(false);
+    setAiScanSummary('');
+    setPendingTagsSummary('');
+    setIsImportDragging(false);
+    importFileStateRef.current = null;
     if (importFileRef.current) importFileRef.current.value = '';
   };
 
-  const handleImportFileChange = async (event) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
+  const selectImportFile = (file) => {
+    if (!isSupportedImportFile(file)) {
+      setImportError(`Unsupported file type. Upload a ${IMPORT_FILE_LABEL} file.`);
+      return;
+    }
 
-    setIsParsingImport(true);
+    importFileStateRef.current = file;
+    setImportFileName(file.name);
+    setImportRows([]);
     setImportError('');
     setImportResult(null);
-    setImportFileName(file.name);
+    setAiScanComplete(false);
+    setAiScanSummary('');
+    setPendingTagsSummary('');
+  };
+
+  const handleImportFileChange = (event) => {
+    const file = event.target.files?.[0];
+    if (file) selectImportFile(file);
+  };
+
+  const handleImportDragOver = (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (!isAiScanning && !bulkImportUsers.isPending) {
+      setIsImportDragging(true);
+    }
+  };
+
+  const handleImportDragLeave = (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setIsImportDragging(false);
+  };
+
+  const handleImportDrop = (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setIsImportDragging(false);
+    if (isAiScanning || bulkImportUsers.isPending) return;
+
+    const file = event.dataTransfer.files?.[0];
+    if (file) selectImportFile(file);
+  };
+
+  const handleAiScan = async () => {
+    const file = importFileStateRef.current;
+    if (!file) {
+      setImportError(`Choose a ${IMPORT_FILE_LABEL} file before scanning.`);
+      return;
+    }
+
+    setIsAiScanning(true);
+    setImportError('');
+    setImportResult(null);
+    setAiScanComplete(false);
+    setAiScanSummary('');
+    setPendingTagsSummary('');
+    setImportRows([]);
 
     try {
-      const parsed = await parseUserImportFile(file);
-      const validated = validateImportRows(parsed, {
+      const scanPayload = await prepareImportScanPayload(file);
+      const scanResult = await base44.ai.scanUserImport(scanPayload);
+
+      const validated = validateImportRows(scanResult.users, {
         departments,
         designations,
-        existingEmails,
+        allowPendingTags: true,
       });
+
+      const pendingTags = getPendingImportTags(scanResult.users, departments, designations);
+      const pendingSummary = formatPendingImportTagsSummary(pendingTags);
+
       setImportRows(validated);
-      if (!validated.some((row) => row.valid)) {
+      setAiScanComplete(true);
+      setAiScanSummary(scanResult.summary || `Found ${scanResult.users.length} users.`);
+      setPendingTagsSummary(pendingSummary);
+
+      const readyCount = validated.filter((row) => row.valid).length;
+      if (!readyCount) {
         setImportError(
-          'No valid users to import. Each row must include full name, email, department, and designation that match existing tags.',
+          'Scan finished, but no users are ready to import. Check missing fields or invalid rows.',
         );
+        toast.error('Scan complete, but no users are ready to import.');
+      } else {
+        toast.success(`Scan complete. ${readyCount} user${readyCount === 1 ? '' : 's'} ready to import.`);
       }
     } catch (error) {
       setImportRows([]);
-      setImportError(error instanceof Error ? error.message : 'Failed to read the document.');
+      setAiScanComplete(false);
+      const message = error instanceof Error ? error.message : 'AI document scan failed.';
+      setImportError(message);
+      toast.error(message);
     } finally {
-      setIsParsingImport(false);
+      setIsAiScanning(false);
     }
   };
 
@@ -594,6 +862,78 @@ export default function UserManagement() {
     });
   };
 
+  const isUserSelected = (userId) => selectedUserIds.includes(userId);
+
+  const toggleUserSelection = (userId, checked) => {
+    setSelectedUserIds((current) => {
+      if (checked) {
+        return current.includes(userId) ? current : [...current, userId];
+      }
+      return current.filter((id) => id !== userId);
+    });
+  };
+
+  const togglePageSelection = (pageUserIds, checked) => {
+    setSelectedUserIds((current) => {
+      if (!checked) {
+        return current.filter((id) => !pageUserIds.includes(id));
+      }
+      const next = new Set(current);
+      pageUserIds.forEach((id) => next.add(id));
+      return [...next];
+    });
+  };
+
+  const clearSelection = () => {
+    setSelectedUserIds([]);
+    setExpandedUserId(null);
+  };
+
+  const getPageSelectionState = (pageUsers) => {
+    const pageUserIds = pageUsers.map((user) => user.id);
+    const selectedOnPage = pageUserIds.filter((id) => selectedUserIds.includes(id));
+    return {
+      pageUserIds,
+      allSelected: pageUserIds.length > 0 && selectedOnPage.length === pageUserIds.length,
+      someSelected: selectedOnPage.length > 0 && selectedOnPage.length < pageUserIds.length,
+    };
+  };
+
+  const openBulkEditDialog = () => {
+    setBulkEditForm(EMPTY_BULK_EDIT);
+    setShowBulkEdit(true);
+  };
+
+  const closeBulkEditDialog = () => {
+    setShowBulkEdit(false);
+    setBulkEditForm(EMPTY_BULK_EDIT);
+  };
+
+  const handleBulkEditSubmit = () => {
+    /** @type {Record<string, string | null>} */
+    const updates = {};
+    if (bulkEditForm.role !== BULK_NO_CHANGE) updates.role = bulkEditForm.role;
+    if (bulkEditForm.department_id !== BULK_NO_CHANGE) {
+      updates.departmentId = bulkEditForm.department_id === 'none' ? null : bulkEditForm.department_id;
+    }
+    if (bulkEditForm.designation_id !== BULK_NO_CHANGE) {
+      updates.designationId = bulkEditForm.designation_id === 'none' ? null : bulkEditForm.designation_id;
+    }
+    if (!Object.keys(updates).length) {
+      toast.error('Choose at least one field to update.');
+      return;
+    }
+    bulkUpdateUsers.mutate({ userIds: selectedUserIds, updates });
+  };
+
+  const handleBulkDelete = () => {
+    if (!deletableSelectedUserIds.length) {
+      toast.error('You cannot delete your own account.');
+      return;
+    }
+    bulkDeleteUsers.mutate(deletableSelectedUserIds);
+  };
+
   if (currentUser?.role !== 'superuser') {
     return (
       <PageShell>
@@ -603,7 +943,13 @@ export default function UserManagement() {
   }
 
   const staffHeader = (
-    <div className="grid grid-cols-[1.2fr_1.2fr_1fr_1fr_0.8fr_1fr_120px] gap-4 px-4 py-3 border-b border-border bg-muted/20 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+    <div className="grid grid-cols-[40px_1.2fr_1.2fr_1fr_1fr_0.8fr_1fr_120px] gap-4 px-4 py-3 border-b border-border bg-muted/20 text-xs font-semibold text-muted-foreground uppercase tracking-wide items-center">
+      <UserSelectionCheckbox
+        checked={getPageSelectionState(paginatedStaffUsers).allSelected}
+        indeterminate={getPageSelectionState(paginatedStaffUsers).someSelected}
+        onCheckedChange={(checked) => togglePageSelection(getPageSelectionState(paginatedStaffUsers).pageUserIds, checked === true)}
+        ariaLabel="Select all staff on this page"
+      />
       <span>Name</span>
       <span>Email</span>
       <span>Department</span>
@@ -614,8 +960,31 @@ export default function UserManagement() {
     </div>
   );
 
-  const roleTableHeader = (
-    <div className="grid grid-cols-[1.2fr_1.2fr_1fr_1fr_0.8fr_120px] gap-4 px-4 py-3 border-b border-border bg-muted/20 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+  const superuserHeader = (
+    <div className="grid grid-cols-[40px_1.2fr_1.2fr_1fr_1fr_0.8fr_120px] gap-4 px-4 py-3 border-b border-border bg-muted/20 text-xs font-semibold text-muted-foreground uppercase tracking-wide items-center">
+      <UserSelectionCheckbox
+        checked={getPageSelectionState(paginatedSuperuserUsers).allSelected}
+        indeterminate={getPageSelectionState(paginatedSuperuserUsers).someSelected}
+        onCheckedChange={(checked) => togglePageSelection(getPageSelectionState(paginatedSuperuserUsers).pageUserIds, checked === true)}
+        ariaLabel="Select all super users on this page"
+      />
+      <span>Name</span>
+      <span>Email</span>
+      <span>Department</span>
+      <span>Designation</span>
+      <span>Role</span>
+      <span>Staff Assigned</span>
+    </div>
+  );
+
+  const adminHeader = (
+    <div className="grid grid-cols-[40px_1.2fr_1.2fr_1fr_1fr_0.8fr_120px] gap-4 px-4 py-3 border-b border-border bg-muted/20 text-xs font-semibold text-muted-foreground uppercase tracking-wide items-center">
+      <UserSelectionCheckbox
+        checked={getPageSelectionState(paginatedAdminUsers).allSelected}
+        indeterminate={getPageSelectionState(paginatedAdminUsers).someSelected}
+        onCheckedChange={(checked) => togglePageSelection(getPageSelectionState(paginatedAdminUsers).pageUserIds, checked === true)}
+        ariaLabel="Select all admins on this page"
+      />
       <span>Name</span>
       <span>Email</span>
       <span>Department</span>
@@ -647,6 +1016,33 @@ export default function UserManagement() {
 
       {isLoading ? <SectionLoader label="Loading users..." /> : null}
 
+      {selectedUserIds.length > 0 ? (
+        <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-xl border border-primary/30 bg-primary/5 px-4 py-3">
+          <p className="text-sm font-medium text-foreground">
+            {selectedUserIds.length} user{selectedUserIds.length === 1 ? '' : 's'} selected
+          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="outline" size="sm" onClick={clearSelection}>
+              Clear Selection
+            </Button>
+            <Button variant="outline" size="sm" className="gap-1.5" onClick={openBulkEditDialog}>
+              <Pencil className="w-3.5 h-3.5" />
+              Edit Selected
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              className="gap-1.5"
+              onClick={() => setShowBulkDelete(true)}
+              disabled={deletableSelectedUserIds.length === 0}
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              Delete Selected
+            </Button>
+          </div>
+        </div>
+      ) : null}
+
       <div className="space-y-6">
         <UserTableSection
           title="Super Users"
@@ -664,12 +1060,13 @@ export default function UserManagement() {
             />
           }
         >
-          {roleTableHeader}
+          {superuserHeader}
           <div className="divide-y divide-border">
             {paginatedSuperuserUsers.map((user) => {
               const isExpanded = expandedUserId === user.id;
+              const isSelected = isUserSelected(user.id);
               return (
-                <div key={user.id} className={isExpanded ? 'bg-muted/10' : ''}>
+                <div key={user.id} className={isExpanded || isSelected ? 'bg-muted/10' : ''}>
                   <div
                     role="button"
                     tabIndex={0}
@@ -680,8 +1077,13 @@ export default function UserManagement() {
                         toggleUserExpand(user);
                       }
                     }}
-                    className="grid grid-cols-[1.2fr_1.2fr_1fr_1fr_0.8fr_120px] gap-4 px-4 py-3 items-center hover:bg-muted/20 transition-colors cursor-pointer"
+                    className="grid grid-cols-[40px_1.2fr_1.2fr_1fr_1fr_0.8fr_120px] gap-4 px-4 py-3 items-center hover:bg-muted/20 transition-colors cursor-pointer"
                   >
+                    <UserSelectionCheckbox
+                      checked={isSelected}
+                      onCheckedChange={(checked) => toggleUserSelection(user.id, checked === true)}
+                      ariaLabel={`Select ${userLabel(user)}`}
+                    />
                     <div className="flex items-center gap-2 min-w-0">
                       <ChevronDown
                         className={`w-4 h-4 text-muted-foreground flex-shrink-0 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
@@ -763,8 +1165,9 @@ export default function UserManagement() {
           <div className="divide-y divide-border">
             {paginatedStaffUsers.map((user) => {
               const isExpanded = expandedUserId === user.id;
+              const isSelected = isUserSelected(user.id);
               return (
-                <div key={user.id} className={isExpanded ? 'bg-muted/10' : ''}>
+                <div key={user.id} className={isExpanded || isSelected ? 'bg-muted/10' : ''}>
                   <div
                     role="button"
                     tabIndex={0}
@@ -775,8 +1178,13 @@ export default function UserManagement() {
                         toggleUserExpand(user);
                       }
                     }}
-                    className="grid grid-cols-[1.2fr_1.2fr_1fr_1fr_0.8fr_1fr_120px] gap-4 px-4 py-3 items-center hover:bg-muted/20 transition-colors cursor-pointer"
+                    className="grid grid-cols-[40px_1.2fr_1.2fr_1fr_1fr_0.8fr_1fr_120px] gap-4 px-4 py-3 items-center hover:bg-muted/20 transition-colors cursor-pointer"
                   >
+                    <UserSelectionCheckbox
+                      checked={isSelected}
+                      onCheckedChange={(checked) => toggleUserSelection(user.id, checked === true)}
+                      ariaLabel={`Select ${userLabel(user)}`}
+                    />
                     <div className="flex items-center gap-2 min-w-0">
                       <ChevronDown
                         className={`w-4 h-4 text-muted-foreground flex-shrink-0 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
@@ -874,12 +1282,13 @@ export default function UserManagement() {
             />
           }
         >
-          {roleTableHeader}
+          {adminHeader}
           <div className="divide-y divide-border">
             {paginatedAdminUsers.map((user) => {
               const isExpanded = expandedUserId === user.id;
+              const isSelected = isUserSelected(user.id);
               return (
-                <div key={user.id} className={isExpanded ? 'bg-muted/10' : ''}>
+                <div key={user.id} className={isExpanded || isSelected ? 'bg-muted/10' : ''}>
                   <div
                     role="button"
                     tabIndex={0}
@@ -890,8 +1299,13 @@ export default function UserManagement() {
                         toggleUserExpand(user);
                       }
                     }}
-                    className="grid grid-cols-[1.2fr_1.2fr_1fr_1fr_0.8fr_120px] gap-4 px-4 py-3 items-center hover:bg-muted/20 transition-colors cursor-pointer"
+                    className="grid grid-cols-[40px_1.2fr_1.2fr_1fr_1fr_0.8fr_120px] gap-4 px-4 py-3 items-center hover:bg-muted/20 transition-colors cursor-pointer"
                   >
+                    <UserSelectionCheckbox
+                      checked={isSelected}
+                      onCheckedChange={(checked) => toggleUserSelection(user.id, checked === true)}
+                      ariaLabel={`Select ${userLabel(user)}`}
+                    />
                     <div className="flex items-center gap-2 min-w-0">
                       <ChevronDown
                         className={`w-4 h-4 text-muted-foreground flex-shrink-0 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
@@ -961,16 +1375,47 @@ export default function UserManagement() {
           <DialogHeader className="flex-shrink-0 px-6 pt-6 pb-3">
             <DialogTitle>Import Users</DialogTitle>
             <DialogDescription>
-              Upload a CSV or PDF with user names, emails, departments, and designations.
+              Upload or drag and drop a {IMPORT_FILE_LABEL} file, then use Scan with AI for the most accurate results before creating users.
             </DialogDescription>
           </DialogHeader>
 
           <div className="flex-1 min-h-0 overflow-y-auto px-6 space-y-4 pb-4">
-            <div className="rounded-lg border border-dashed border-border bg-muted/20 p-4">
+            {importFileName && !aiScanComplete && !isAiScanning ? (
+              <div className="rounded-lg border border-primary/30 bg-primary/5 px-4 py-3 flex items-start gap-3">
+                <Sparkles className="w-5 h-5 text-primary flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm font-medium text-foreground">Use Scan with AI for better accuracy</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Your document is ready. Click <span className="font-medium text-foreground">Scan with AI</span> so the app can read names, emails, departments, and designations more reliably before you create users.
+                  </p>
+                </div>
+              </div>
+            ) : null}
+
+            {!importFileName ? (
+              <div className="rounded-lg border border-border bg-muted/20 px-4 py-3 flex items-start gap-3">
+                <Info className="w-5 h-5 text-muted-foreground flex-shrink-0 mt-0.5" />
+                <p className="text-xs text-muted-foreground">
+                  After you upload a document, use the <span className="font-medium text-foreground">Scan with AI</span> button for better accuracy when extracting user details.
+                </p>
+              </div>
+            ) : null}
+
+            <div
+              className={`rounded-lg border border-dashed p-4 transition-colors ${
+                isImportDragging
+                  ? 'border-primary bg-primary/10'
+                  : 'border-border bg-muted/20'
+              }`}
+              onDragEnter={handleImportDragOver}
+              onDragOver={handleImportDragOver}
+              onDragLeave={handleImportDragLeave}
+              onDrop={handleImportDrop}
+            >
               <input
                 ref={importFileRef}
                 type="file"
-                accept=".csv,.pdf,text/csv,application/pdf"
+                accept={IMPORT_FILE_ACCEPT}
                 className="hidden"
                 onChange={handleImportFileChange}
               />
@@ -980,23 +1425,49 @@ export default function UserManagement() {
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-foreground">Upload document</p>
                     <p className="text-xs text-muted-foreground mt-1">
-                      CSV columns: Name, Email, Department, Designation. PDF files with the same fields are also supported.
+                      Drag and drop a {IMPORT_FILE_LABEL} file here, or click Choose File. Photos and scans are supported with AI.
                     </p>
-                    {importFileName ? (
+                    {isImportDragging ? (
+                      <p className="text-xs font-medium text-primary mt-2">Drop your document here</p>
+                    ) : null}
+                    {importFileName && !isImportDragging ? (
                       <p className="text-xs text-foreground mt-2 truncate">{importFileName}</p>
                     ) : null}
                   </div>
                 </div>
-                <Button
-                  variant="outline"
-                  className="gap-2 flex-shrink-0"
-                  onClick={() => importFileRef.current?.click()}
-                  disabled={isParsingImport || bulkImportUsers.isPending}
-                >
-                  <Upload className="w-4 h-4" />
-                  {isParsingImport ? 'Reading...' : 'Choose File'}
-                </Button>
+                <div className="flex flex-col sm:flex-row gap-2 flex-shrink-0">
+                  <Button
+                    variant="outline"
+                    className="gap-2"
+                    onClick={() => importFileRef.current?.click()}
+                    disabled={isAiScanning || bulkImportUsers.isPending}
+                  >
+                    <Upload className="w-4 h-4" />
+                    Choose File
+                  </Button>
+                  <Button
+                    className="gap-2"
+                    onClick={handleAiScan}
+                    disabled={!importFileName || isAiScanning || bulkImportUsers.isPending}
+                  >
+                    <Sparkles className="w-4 h-4" />
+                    {isAiScanning ? 'Scanning...' : 'Scan with AI'}
+                  </Button>
+                </div>
               </div>
+              {isAiScanning ? (
+                <p className="text-xs text-muted-foreground mt-3">
+                  AI is reading your document in the background. You will be notified when scanning is complete.
+                </p>
+              ) : null}
+              {aiScanComplete && aiScanSummary ? (
+                <div className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 mt-3">
+                  <p className="text-sm font-medium text-emerald-700 dark:text-emerald-300">{aiScanSummary}</p>
+                  {pendingTagsSummary ? (
+                    <p className="text-xs text-emerald-700/90 dark:text-emerald-300/90 mt-1">{pendingTagsSummary}</p>
+                  ) : null}
+                </div>
+              ) : null}
             </div>
 
             {importError ? (
@@ -1006,8 +1477,8 @@ export default function UserManagement() {
             <div className="grid sm:grid-cols-2 gap-4">
               <div>
                 <label className="text-sm font-medium text-foreground mb-1.5 block">Default Password *</label>
-                <Input
-                  type="password"
+                <PasswordField
+                  id="import-password"
                   placeholder="Temporary password for all imported users"
                   value={importPassword}
                   onChange={(e) => setImportPassword(e.target.value)}
@@ -1051,6 +1522,15 @@ export default function UserManagement() {
                       </div>
                       <p className="text-xs text-muted-foreground mt-1">
                         {row.department || 'No department'} · {row.designation || 'No designation'}
+                        {row.willCreateDepartment || row.willCreateDesignation ? (
+                          <span className="text-primary">
+                            {' '}
+                            · New {[
+                              row.willCreateDepartment ? 'department' : '',
+                              row.willCreateDesignation ? 'designation' : '',
+                            ].filter(Boolean).join(' & ')} pending
+                          </span>
+                        ) : null}
                       </p>
                       {row.issues.length > 0 ? (
                         <p className="text-xs text-destructive mt-1">{row.issues.join(' · ')}</p>
@@ -1060,37 +1540,144 @@ export default function UserManagement() {
                 </div>
               </div>
             ) : null}
-
-            {importResult ? (
-              <div className="rounded-lg border border-border bg-muted/20 px-4 py-3 text-sm">
-                <p className="font-medium text-foreground">
-                  Created {importResult.created} user{importResult.created === 1 ? '' : 's'}.
-                </p>
-                {importResult.failed.length > 0 ? (
-                  <p className="text-destructive mt-1">
-                    {importResult.failed.length} failed: {importResult.failed.map((item) => item.email).join(', ')}
-                  </p>
-                ) : null}
-              </div>
-            ) : null}
           </div>
 
           <DialogFooter className="flex-shrink-0 px-6 py-4 border-t border-border bg-card">
             <Button variant="outline" onClick={closeImport}>
-              {importResult ? 'Close' : 'Cancel'}
+              Cancel
             </Button>
             <Button
               onClick={handleBulkImport}
               disabled={
                 !importPassword.trim()
+                || !aiScanComplete
                 || validImportRows.length === 0
                 || bulkImportUsers.isPending
-                || isParsingImport
+                || isAiScanning
               }
             >
               {bulkImportUsers.isPending
                 ? 'Creating users...'
                 : `Create ${validImportRows.length} User${validImportRows.length === 1 ? '' : 's'}`}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {importSuccessOverlay ? (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/45 backdrop-blur-sm px-4">
+          <div className="w-full max-w-sm rounded-xl border border-emerald-500/30 bg-card px-6 py-5 text-center shadow-2xl">
+            <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500/15">
+              <BadgeCheck className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
+            </div>
+            <p className="text-base font-semibold text-foreground">{importSuccessOverlay}</p>
+          </div>
+        </div>
+      ) : null}
+
+      <Dialog open={showBulkEdit} onOpenChange={(open) => (open ? setShowBulkEdit(true) : closeBulkEditDialog())}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Edit Selected Users</DialogTitle>
+            <DialogDescription>
+              Apply changes to {selectedUserIds.length} selected user{selectedUserIds.length === 1 ? '' : 's'}. Leave a field on &quot;No change&quot; to keep existing values.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div>
+              <label className="text-sm font-medium text-foreground mb-1.5 block">Role</label>
+              <Select
+                value={bulkEditForm.role}
+                onValueChange={(value) => setBulkEditForm((current) => ({ ...current, role: value }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="No change" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={BULK_NO_CHANGE}>No change</SelectItem>
+                  <SelectItem value="staff">Staff</SelectItem>
+                  <SelectItem value="admin">Admin</SelectItem>
+                  <SelectItem value="superuser">Super User</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="text-sm font-medium text-foreground mb-1.5 block">Department</label>
+              <Select
+                value={bulkEditForm.department_id}
+                onValueChange={(value) => setBulkEditForm((current) => ({ ...current, department_id: value }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="No change" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={BULK_NO_CHANGE}>No change</SelectItem>
+                  <SelectItem value="none">None</SelectItem>
+                  {sortedDepartments.map((department) => (
+                    <SelectItem key={department.id} value={department.id}>
+                      {department.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="text-sm font-medium text-foreground mb-1.5 block">Designation</label>
+              <Select
+                value={bulkEditForm.designation_id}
+                onValueChange={(value) => setBulkEditForm((current) => ({ ...current, designation_id: value }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="No change" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={BULK_NO_CHANGE}>No change</SelectItem>
+                  <SelectItem value="none">None</SelectItem>
+                  {sortedDesignations.map((designation) => (
+                    <SelectItem key={designation.id} value={designation.id}>
+                      {designation.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={closeBulkEditDialog}>Cancel</Button>
+            <Button onClick={handleBulkEditSubmit} disabled={bulkUpdateUsers.isPending}>
+              {bulkUpdateUsers.isPending ? 'Saving...' : `Update ${selectedUserIds.length} User${selectedUserIds.length === 1 ? '' : 's'}`}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showBulkDelete} onOpenChange={setShowBulkDelete}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Delete Selected Users</DialogTitle>
+            <DialogDescription>
+              This will permanently delete {deletableSelectedUserIds.length} selected user{deletableSelectedUserIds.length === 1 ? '' : 's'}. This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="max-h-48 overflow-y-auto rounded-lg border border-border divide-y divide-border">
+            {selectedUsers
+              .filter((user) => deletableSelectedUserIds.includes(user.id))
+              .map((user) => (
+                <div key={user.id} className="px-4 py-2 text-sm">
+                  <p className="font-medium text-foreground">{userLabel(user)}</p>
+                  <p className="text-xs text-muted-foreground">{user.email}</p>
+                </div>
+              ))}
+          </div>
+          {selectedUserIds.length > deletableSelectedUserIds.length ? (
+            <p className="text-xs text-amber-600 dark:text-amber-400">
+              Your own account is excluded from deletion.
+            </p>
+          ) : null}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowBulkDelete(false)}>Cancel</Button>
+            <Button variant="destructive" onClick={handleBulkDelete} disabled={bulkDeleteUsers.isPending || deletableSelectedUserIds.length === 0}>
+              {bulkDeleteUsers.isPending ? 'Deleting...' : `Delete ${deletableSelectedUserIds.length} User${deletableSelectedUserIds.length === 1 ? '' : 's'}`}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1126,8 +1713,8 @@ export default function UserManagement() {
             </div>
             <div>
               <label className="text-sm font-medium text-foreground mb-1.5 block">Temporary Password *</label>
-              <Input
-                type="password"
+              <PasswordField
+                id="create-user-password"
                 placeholder="Set a password"
                 value={form.password}
                 onChange={(e) => setForm({ ...form, password: e.target.value })}

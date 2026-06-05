@@ -20,7 +20,7 @@ import {
   serializeRecord,
   toCamelCase,
 } from './lib/serialize.js';
-import { generateAssistantReply, isAiConfigured } from './lib/ai.js';
+import { generateAssistantReply, isAiConfigured, parseUsersFromImportDocument } from './lib/ai.js';
 
 const app = express();
 
@@ -96,6 +96,20 @@ function isAdmin(user) {
 
 function normalizeNamedRecord(value) {
   return String(value || '').trim().replace(/\s+/g, ' ');
+}
+
+function normalizeEmail(value) {
+  return String(value || '').trim().toLowerCase();
+}
+
+async function findUserByEmailAndPassword(email, password) {
+  const normalizedEmail = normalizeEmail(email);
+  const matches = await prisma.user.findMany({ where: { email: normalizedEmail } });
+  for (const user of matches) {
+    const ok = await comparePassword(password, user.passwordHash);
+    if (ok) return user;
+  }
+  return null;
 }
 
 function normalizeTaskPriority(value) {
@@ -915,7 +929,7 @@ app.use(
     credentials: true,
   })
 );
-app.use(express.json({ limit: '2mb' }));
+app.use(express.json({ limit: '15mb' }));
 
 app.get('/health', (_req, res) => res.json({ ok: true }));
 
@@ -944,7 +958,7 @@ app.post('/api/auth/register', async (req, res) => {
     required(normalizedEmail, 'email');
     required(password, 'password');
 
-    const existing = await prisma.user.findUnique({ where: { email: normalizedEmail } });
+    const existing = await prisma.user.findFirst({ where: { email: normalizedEmail } });
     if (existing) return sendError(res, 409, 'Email already registered');
 
     const passwordHash = await hashPassword(password);
@@ -973,10 +987,8 @@ app.post('/api/auth/login', async (req, res) => {
     const normalizedEmail = String(email || '').trim().toLowerCase();
     required(normalizedEmail, 'email');
     required(password, 'password');
-    const user = await prisma.user.findUnique({ where: { email: normalizedEmail } });
+    const user = await findUserByEmailAndPassword(normalizedEmail, password);
     if (!user) return sendError(res, 401, 'Invalid email or password');
-    const ok = await comparePassword(password, user.passwordHash);
-    if (!ok) return sendError(res, 401, 'Invalid email or password');
     return res.json({
       access_token: signAccessToken(user),
       user: serializeRecord('user', user),
@@ -1034,7 +1046,7 @@ app.post('/api/auth/forgot-password', async (req, res) => {
   try {
     const { email } = normalizeInput(req.body);
     const normalizedEmail = String(email || '').trim().toLowerCase();
-    const user = await prisma.user.findUnique({ where: { email: normalizedEmail } });
+    const user = await prisma.user.findFirst({ where: { email: normalizedEmail } });
     if (user) {
       const resetToken = createResetToken();
       await prisma.user.update({
@@ -1109,6 +1121,37 @@ app.post('/api/ai/log-ticket', requireAuth, async (req, res) => {
     return res.status(201).json(serializeRecord('task', task));
   } catch (error) {
     return sendError(res, error.statusCode || 400, error.message || 'Ticket logging failed');
+  }
+});
+
+app.post('/api/ai/scan-user-import', requireAuth, async (req, res) => {
+  try {
+    if (!isSuperuser(req.authUser)) {
+      return sendError(res, 403, 'Forbidden');
+    }
+    if (!isAiConfigured()) {
+      return sendError(res, 503, 'AI assistant is not configured');
+    }
+
+    const payload = normalizeInput(req.body);
+    const text = String(payload.text || '').trim();
+    const fileName = String(payload.fileName || '').trim();
+    const imageBase64 = String(payload.imageBase64 || '').trim();
+    const imageMimeType = String(payload.imageMimeType || '').trim();
+
+    if (!text && !imageBase64) {
+      return sendError(res, 400, 'Document content is required');
+    }
+
+    const result = await parseUsersFromImportDocument({
+      text,
+      fileName,
+      imageBase64,
+      imageMimeType,
+    });
+    return res.json(result);
+  } catch (error) {
+    return sendError(res, error.statusCode || 400, error.message || 'AI document scan failed');
   }
 });
 

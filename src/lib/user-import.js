@@ -1,4 +1,12 @@
 import * as pdfjs from 'pdfjs-dist';
+import {
+  getImportFileKind,
+  isSupportedImportFile,
+  IMPORT_FILE_LABEL,
+  readFileAsDataUrl,
+} from '@/lib/import-file-types';
+
+export { IMPORT_FILE_ACCEPT, IMPORT_FILE_LABEL, getImportFileKind, isSupportedImportFile } from '@/lib/import-file-types';
 
 pdfjs.GlobalWorkerOptions.workerSrc = new URL(
   'pdfjs-dist/build/pdf.worker.min.mjs',
@@ -256,27 +264,285 @@ export async function extractPdfText(file) {
 
 /**
  * @param {File} file
+ * @returns {Promise<string>}
+ */
+async function extractDocxText(file) {
+  const mammoth = await import('mammoth');
+  const arrayBuffer = await file.arrayBuffer();
+  const result = await mammoth.extractRawText({ arrayBuffer });
+  return result.value || '';
+}
+
+/**
+ * @param {File} file
+ * @returns {Promise<string>}
+ */
+async function extractXlsxText(file) {
+  const XLSX = await import('xlsx');
+  const arrayBuffer = await file.arrayBuffer();
+  const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+  if (!workbook.SheetNames.length) return '';
+
+  return workbook.SheetNames
+    .map((sheetName) => {
+      const sheet = workbook.Sheets[sheetName];
+      const csv = XLSX.utils.sheet_to_csv(sheet).trim();
+      if (!csv) return '';
+      return workbook.SheetNames.length > 1
+        ? `Sheet: ${sheetName}\n${csv}`
+        : csv;
+    })
+    .filter(Boolean)
+    .join('\n\n');
+}
+
+/**
+ * @param {File} file
+ * @returns {Promise<string>}
+ */
+export async function extractImportDocumentText(file) {
+  const kind = getImportFileKind(file);
+  if (!kind || kind === 'image') {
+    throw new Error(`Unsupported file type. Upload a ${IMPORT_FILE_LABEL} file.`);
+  }
+
+  if (kind === 'csv' || kind === 'txt') {
+    return file.text();
+  }
+
+  if (kind === 'pdf') {
+    return extractPdfText(file);
+  }
+
+  if (kind === 'docx') {
+    return extractDocxText(file);
+  }
+
+  if (kind === 'xlsx') {
+    return extractXlsxText(file);
+  }
+
+  throw new Error(`Unsupported file type. Upload a ${IMPORT_FILE_LABEL} file.`);
+}
+
+/**
+ * @param {File} file
+ * @returns {Promise<{ fileName: string, text?: string, imageBase64?: string, imageMimeType?: string }>}
+ */
+export async function prepareImportScanPayload(file) {
+  const kind = getImportFileKind(file);
+  if (!kind) {
+    throw new Error(`Unsupported file type. Upload a ${IMPORT_FILE_LABEL} file.`);
+  }
+
+  if (kind === 'image') {
+    const dataUrl = await readFileAsDataUrl(file);
+    const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
+    if (!match) {
+      throw new Error('Failed to read the uploaded image.');
+    }
+
+    return {
+      fileName: file.name,
+      imageMimeType: match[1],
+      imageBase64: match[2],
+    };
+  }
+
+  const text = await extractImportDocumentText(file);
+  if (!text.trim()) {
+    throw new Error('The uploaded document is empty.');
+  }
+
+  return {
+    fileName: file.name,
+    text,
+  };
+}
+
+function uniqueTagNamesCaseInsensitive(names) {
+  const byKey = new Map();
+  for (const name of names) {
+    const trimmed = String(name || '').trim();
+    if (!trimmed) continue;
+    const key = trimmed.toLowerCase();
+    if (!byKey.has(key)) byKey.set(key, trimmed);
+  }
+  return [...byKey.values()];
+}
+
+function findTagByName(items, name) {
+  const key = String(name || '').trim().toLowerCase();
+  if (!key) return null;
+  return items.find((item) => item.name.trim().toLowerCase() === key) || null;
+}
+
+async function findOrCreateImportTag({
+  name,
+  byName,
+  created,
+  create,
+  findExisting,
+}) {
+  const normalized = String(name || '').trim();
+  const key = normalized.toLowerCase();
+  if (!normalized || byName.has(key)) return;
+
+  try {
+    const createdItem = await create({ name: normalized });
+    byName.set(key, createdItem);
+    created.push(createdItem);
+    return;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '';
+    if (!/already exists/i.test(message)) throw error;
+  }
+
+  const existing = await findExisting(normalized);
+  if (!existing) {
+    throw new Error(`${normalized} already exists`);
+  }
+
+  byName.set(key, existing);
+}
+
+/**
+ * @param {ParsedImportUser[]} rows
+ * @param {Array<{ id: string, name: string }>} departments
+ * @param {Array<{ id: string, name: string }>} designations
+ * @param {{
+ *   createDepartment: (data: { name: string }) => Promise<{ id: string, name: string }>,
+ *   createDesignation: (data: { name: string }) => Promise<{ id: string, name: string }>,
+ *   findDepartmentByName?: (name: string) => Promise<{ id: string, name: string } | null>,
+ *   findDesignationByName?: (name: string) => Promise<{ id: string, name: string } | null>,
+ * }} creators
+ */
+export async function ensureImportTagsForRows(rows, departments, designations, {
+  createDepartment,
+  createDesignation,
+  findDepartmentByName,
+  findDesignationByName,
+}) {
+  const deptByName = new Map(
+    departments.map((item) => [item.name.trim().toLowerCase(), item]),
+  );
+  const desigByName = new Map(
+    designations.map((item) => [item.name.trim().toLowerCase(), item]),
+  );
+  const createdDepartments = [];
+  const createdDesignations = [];
+
+  const uniqueDepartmentNames = uniqueTagNamesCaseInsensitive(
+    rows.map((row) => row.department),
+  );
+  const uniqueDesignationNames = uniqueTagNamesCaseInsensitive(
+    rows.map((row) => row.designation),
+  );
+
+  const resolveDepartment = findDepartmentByName
+    || ((name) => Promise.resolve(findTagByName(departments, name)));
+  const resolveDesignation = findDesignationByName
+    || ((name) => Promise.resolve(findTagByName(designations, name)));
+
+  for (const name of uniqueDepartmentNames) {
+    await findOrCreateImportTag({
+      name,
+      byName: deptByName,
+      created: createdDepartments,
+      create: createDepartment,
+      findExisting: resolveDepartment,
+    });
+  }
+
+  for (const name of uniqueDesignationNames) {
+    await findOrCreateImportTag({
+      name,
+      byName: desigByName,
+      created: createdDesignations,
+      create: createDesignation,
+      findExisting: resolveDesignation,
+    });
+  }
+
+  return {
+    departments: [...deptByName.values()],
+    designations: [...desigByName.values()],
+    createdDepartments,
+    createdDesignations,
+  };
+}
+
+/**
+ * @param {ParsedImportUser[]} rows
+ * @param {Array<{ id: string, name: string }>} departments
+ * @param {Array<{ id: string, name: string }>} designations
+ */
+export function getPendingImportTags(rows, departments, designations) {
+  const existingDepartments = new Set(
+    departments.map((item) => item.name.trim().toLowerCase()),
+  );
+  const existingDesignations = new Set(
+    designations.map((item) => item.name.trim().toLowerCase()),
+  );
+
+  const pendingDepartments = uniqueTagNamesCaseInsensitive(
+    rows.map((row) => row.department),
+  ).filter((name) => !existingDepartments.has(name.toLowerCase()));
+
+  const pendingDesignations = uniqueTagNamesCaseInsensitive(
+    rows.map((row) => row.designation),
+  ).filter((name) => !existingDesignations.has(name.toLowerCase()));
+
+  return { pendingDepartments, pendingDesignations };
+}
+
+/**
+ * @param {{ pendingDepartments: string[], pendingDesignations: string[] }} pending
+ */
+export function formatPendingImportTagsSummary({ pendingDepartments, pendingDesignations }) {
+  const parts = [];
+  if (pendingDepartments.length) {
+    parts.push(`${pendingDepartments.length} new department${pendingDepartments.length === 1 ? '' : 's'}`);
+  }
+  if (pendingDesignations.length) {
+    parts.push(`${pendingDesignations.length} new designation${pendingDesignations.length === 1 ? '' : 's'}`);
+  }
+  if (!parts.length) return '';
+  return `${parts.join(' and ')} will be created when you click Create Users.`;
+}
+
+/**
+ * @param {File} file
  * @returns {Promise<ParsedImportUser[]>}
  */
 export async function parseUserImportFile(file) {
-  const extension = file.name.split('.').pop()?.toLowerCase();
+  const kind = getImportFileKind(file);
+  if (!kind || kind === 'image') {
+    throw new Error(`Unsupported file type. Upload a ${IMPORT_FILE_LABEL} file.`);
+  }
 
-  if (extension === 'csv') {
-    const text = await file.text();
+  const text = await extractImportDocumentText(file);
+
+  if (kind === 'csv' || kind === 'xlsx') {
     const rows = parseCsvUsers(text);
     validateImportDocument(rows);
     return rows;
   }
 
-  if (extension === 'pdf') {
-    const text = await extractPdfText(file);
+  if (kind === 'pdf') {
     validatePdfFieldLabels(text);
     const rows = parsePdfUsers(text);
     validateImportDocument(rows);
     return rows;
   }
 
-  throw new Error('Unsupported file type. Upload a CSV or PDF document.');
+  if (kind === 'txt' || kind === 'docx') {
+    const rows = parsePdfUsers(text);
+    validateImportDocument(rows);
+    return rows;
+  }
+
+  throw new Error(`Unsupported file type. Upload a ${IMPORT_FILE_LABEL} file.`);
 }
 
 function matchByName(items, value) {
@@ -290,33 +556,29 @@ function matchByName(items, value) {
  * @param {{
  *   departments: Array<{ id: string, name: string }>,
  *   designations: Array<{ id: string, name: string }>,
- *   existingEmails: Set<string>,
+ *   allowPendingTags?: boolean,
  * }} context
  */
-export function validateImportRows(rows, { departments, designations, existingEmails }) {
-  const seenEmails = new Set();
-
+export function validateImportRows(rows, { departments, designations, allowPendingTags = false }) {
   return rows.map((row, index) => {
     const issues = [];
-    const email = row.email.trim().toLowerCase();
 
     if (!row.fullName.trim()) issues.push('Missing name');
     if (!row.email.trim()) issues.push('Missing email');
     else if (!EMAIL_PATTERN.test(row.email.trim())) issues.push('Invalid email format');
-    else if (existingEmails.has(email)) issues.push('Email already exists in the system');
-    else if (seenEmails.has(email)) issues.push('Duplicate email in file');
-    else seenEmails.add(email);
 
     if (!row.department.trim()) issues.push('Missing department');
     if (!row.designation.trim()) issues.push('Missing designation');
 
     const department = matchByName(departments, row.department);
     const designation = matchByName(designations, row.designation);
+    const willCreateDepartment = Boolean(row.department.trim() && !department);
+    const willCreateDesignation = Boolean(row.designation.trim() && !designation);
 
-    if (row.department.trim() && !department) {
+    if (willCreateDepartment && !allowPendingTags) {
       issues.push(`Unknown department: ${row.department}`);
     }
-    if (row.designation.trim() && !designation) {
+    if (willCreateDesignation && !allowPendingTags) {
       issues.push(`Unknown designation: ${row.designation}`);
     }
 
@@ -325,6 +587,8 @@ export function validateImportRows(rows, { departments, designations, existingEm
       rowNumber: index + 1,
       departmentId: department?.id || null,
       designationId: designation?.id || null,
+      willCreateDepartment: allowPendingTags && willCreateDepartment,
+      willCreateDesignation: allowPendingTags && willCreateDesignation,
       issues,
       valid: issues.length === 0,
     };

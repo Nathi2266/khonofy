@@ -49,3 +49,21 @@ declare module "@/components/AuthLayout" {
 
   export default function AuthLayout(props: AuthLayoutProps): JSX.Element;
 }
+
+declare module "@/components/ui/checkbox" {
+  import type * as React from "react";
+
+  export interface CheckboxProps extends React.ComponentPropsWithoutRef<"button"> {
+    checked?: boolean | "indeterminate";
+    defaultChecked?: boolean;
+    onCheckedChange?: (checked: boolean | "indeterminate") => void;
+    disabled?: boolean;
+    required?: boolean;
+    name?: string;
+    value?: string;
+  }
+
+  export const Checkbox: React.ForwardRefExoticComponent<
+    CheckboxProps & React.RefAttributes<HTMLButtonElement>
+  >;
+}

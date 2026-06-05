@@ -15,10 +15,15 @@ password: Demo123!
 Name: Mac
 email: mac@khonofy.local
 password: Demo123!
-
+---------------------------------------------------------
 To re-seed later:
 cd backend
 npm run db:seed
-
+-------------------------------------------------------
 running the frontend in another port:
 npm run dev -- --port 5174
+---------------------------------------------------------
+creating docs
+scripts/scripts/generate-users-pdf.js
+
+command: node generate-users-pdf.js

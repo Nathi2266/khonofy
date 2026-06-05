@@ -116,6 +116,144 @@ export function isAiConfigured() {
   return Boolean(env.azureOpenAiApiKey && env.azureOpenAiEndpoint && env.azureOpenAiModel);
 }
 
+function buildUserImportPrompt() {
+  return [
+    'You extract structured employee/user records from HR onboarding or user-import documents.',
+    'The input may be CSV-like text, a PDF export, a Word document, an Excel spreadsheet, plain text, or a photo/scan of a user list.',
+    'Return valid JSON only with this exact shape:',
+    '{',
+    '  "users": [',
+    '    {',
+    '      "fullName": "string",',
+    '      "email": "string",',
+    '      "department": "string",',
+    '      "designation": "string"',
+    '    }',
+    '  ],',
+    '  "summary": "string"',
+    '}',
+    'Rules:',
+    '- Extract every user row you can find, including rows that repeat the same name or email.',
+    '- Do not deduplicate users by email or name.',
+    '- Each user must include fullName, email, department, and designation.',
+    '- Skip header rows, page titles, totals, and non-user metadata.',
+    '- Preserve department and designation names exactly as written in the document.',
+    '- Existing departments and designations in the app will be reused by name; do not invent duplicate tag names.',
+    '- Use lowercase emails when possible.',
+    '- If a row is missing any required field, omit that row.',
+    '- summary should briefly state how many users were found.',
+  ].join('\n');
+}
+
+function normalizeParsedImportUser(user) {
+  if (!user || typeof user !== 'object') return null;
+
+  const fullName = normalizeText(user.fullName || user.full_name || user.name);
+  const email = normalizeText(user.email).toLowerCase();
+  const department = normalizeText(user.department);
+  const designation = normalizeText(user.designation);
+
+  if (!fullName || !email || !department || !designation) return null;
+
+  return { fullName, email, department, designation };
+}
+
+function normalizeParsedImportUsers(users) {
+  return (Array.isArray(users) ? users : [])
+    .map(normalizeParsedImportUser)
+    .filter(Boolean);
+}
+
+export async function parseUsersFromImportDocument({
+  text = '',
+  fileName = '',
+  imageBase64 = '',
+  imageMimeType = '',
+}) {
+  if (!isAiConfigured()) {
+    throw new Error('AI assistant is not configured on the server');
+  }
+
+  const hasImage = Boolean(imageBase64 && imageMimeType);
+  const documentText = normalizeText(text).slice(0, 50000);
+  if (!hasImage && !documentText) {
+    throw new Error('The uploaded document is empty');
+  }
+
+  const endpoint = env.azureOpenAiEndpoint.replace(/\/$/, '');
+  const userMessage = hasImage
+    ? {
+        role: 'user',
+        content: [
+          {
+            type: 'text',
+            text: [
+              fileName ? `File name: ${fileName}` : '',
+              'This image contains a user import document. Read all visible text and extract user records from the photo or scan.',
+            ].filter(Boolean).join('\n\n'),
+          },
+          {
+            type: 'image_url',
+            image_url: {
+              url: `data:${imageMimeType};base64,${imageBase64}`,
+            },
+          },
+        ],
+      }
+    : {
+        role: 'user',
+        content: [
+          fileName ? `File name: ${fileName}` : '',
+          'Document contents:',
+          documentText,
+        ].filter(Boolean).join('\n\n'),
+      };
+
+  const response = await fetch(
+    `${endpoint}/openai/deployments/${encodeURIComponent(env.azureOpenAiModel)}/chat/completions?api-version=${encodeURIComponent(env.azureOpenAiApiVersion)}`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'api-key': env.azureOpenAiApiKey,
+      },
+      body: JSON.stringify({
+        temperature: 0.1,
+        max_completion_tokens: 4000,
+        response_format: { type: 'json_object' },
+        messages: [
+          { role: 'system', content: buildUserImportPrompt() },
+          userMessage,
+        ],
+      }),
+    },
+  );
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const message = data?.error?.message || data?.message || 'Azure OpenAI request failed';
+    throw new Error(message);
+  }
+
+  const content = data?.choices?.[0]?.message?.content;
+  if (!content) {
+    throw new Error('No AI response content received');
+  }
+
+  const parsed = parseJsonResponse(content);
+  const users = normalizeParsedImportUsers(parsed.users);
+  if (!users.length) {
+    throw new Error(
+      'AI could not find complete user records. Each row needs full name, email, department, and designation.',
+    );
+  }
+
+  return {
+    users,
+    summary: normalizeText(parsed.summary) || `Found ${users.length} user${users.length === 1 ? '' : 's'}.`,
+  };
+}
+
 export async function generateAssistantReply({ user, messages, projects = [] }) {
   if (!isAiConfigured()) {
     throw new Error('AI assistant is not configured on the server');

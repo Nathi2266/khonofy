@@ -18,8 +18,8 @@ const DEMO_PASSWORD = 'Demo123!';
 
 const DEMO_USERS = [
   {
-    email: 'james@khonofy.local',
-    fullName: 'James',
+    email: 'sam@khonofy.local',
+    fullName: 'Sam',
     role: UserRole.superuser,
   },
   {
@@ -175,24 +175,27 @@ async function backfillExistingTimeEntries() {
 }
 
 async function upsertDemoUser({ email, fullName, role, adminId }, passwordHash, departmentId, designationId) {
-  return prisma.user.upsert({
-    where: { email },
-    update: {
-      fullName,
-      role,
-      passwordHash,
-      departmentId,
-      designationId,
-      adminId: adminId ?? null,
-    },
-    create: {
+  const existing = await prisma.user.findFirst({ where: { email } });
+  const data = {
+    fullName,
+    role,
+    passwordHash,
+    departmentId,
+    designationId,
+    adminId: adminId ?? null,
+  };
+
+  if (existing) {
+    return prisma.user.update({
+      where: { id: existing.id },
+      data,
+    });
+  }
+
+  return prisma.user.create({
+    data: {
       email,
-      fullName,
-      role,
-      passwordHash,
-      departmentId,
-      designationId,
-      adminId: adminId ?? null,
+      ...data,
     },
   });
 }

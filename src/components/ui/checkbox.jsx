@@ -4,6 +4,15 @@ import { Check } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 
+/**
+ * @typedef {import('react').ComponentPropsWithoutRef<'button'> & {
+ *   checked?: boolean | 'indeterminate',
+ *   defaultChecked?: boolean,
+ *   onCheckedChange?: (checked: boolean | 'indeterminate') => void,
+ * }} CheckboxProps
+ */
+
+/** @type {React.ForwardRefRenderFunction<HTMLButtonElement, CheckboxProps>} */
 const Checkbox = React.forwardRef(({ className, ...props }, ref) => (
   <CheckboxPrimitive.Root
     ref={ref}
