@@ -1,10 +1,16 @@
 {
-  "name": "Khonofy",
+  "name": "Khonology - Khonofy",
   "short_name": "Khonofy",
   "description": "Smart time tracking, task management and reporting platform",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#1e40af",
-  "icons": []
+  "icons": [
+    {
+      "src": "/favicon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    }
+  ]
 }

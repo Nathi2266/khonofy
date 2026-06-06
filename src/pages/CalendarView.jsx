@@ -9,8 +9,14 @@ import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/use-toast';
 import PageHeader from '@/components/PageHeader';
 import PageShell from '@/components/PageShell';
-import { CalendarDays, ChevronLeft, ChevronRight, Plus } from 'lucide-react';
+import { CalendarDays, ChevronLeft, ChevronRight, Lock, Plus } from 'lucide-react';
 import CalendarEntryModal from '@/components/calendar/CalendarEntryModal';
+import VoiceTicketDialog from '@/components/calendar/VoiceTicketDialog';
+import { buildCalendarFormFromTicket } from '@/components/calendar/voiceTicketUtils';
+import {
+  buildRecurringOccurrences,
+  createDefaultRecurringState,
+} from '@/components/calendar/recurringEntryUtils';
 import CalendarWeekGrid from '@/components/calendar/CalendarWeekGrid';
 import {
   HOUR_HEIGHT,
@@ -19,6 +25,7 @@ import {
   buildDateTime,
   getWeekRange,
   parseEntryDate,
+  pointerClientYToMinutes,
   snapMinutes,
 } from '@/components/calendar/calendarMath';
 
@@ -73,6 +80,7 @@ function createEntryForm(entry, user) {
     user_name: entry?.user_name || user?.full_name || user?.email || '',
     start_at: startAt,
     end_at: endAt,
+    ...createDefaultRecurringState(startAt),
   };
 }
 
@@ -82,6 +90,7 @@ export default function CalendarView() {
   const scrollRef = useRef(null);
   const [weekOffset, setWeekOffset] = useState(0);
   const [modalState, setModalState] = useState({ open: false, mode: 'create', entryId: null });
+  const [voiceDialogOpen, setVoiceDialogOpen] = useState(false);
   const [form, setForm] = useState(() => createEntryForm(null, null));
   const [previewSelection, setPreviewSelection] = useState(null);
   const [interaction, setInteraction] = useState(null);
@@ -110,6 +119,18 @@ export default function CalendarView() {
     queryFn: () => base44.entities.Task.filter({ assigned_to: user.id }),
     enabled: !!user?.id,
   });
+
+  const { data: myTimesheets = [] } = useQuery({
+    queryKey: ['myTimesheets', user?.id],
+    queryFn: () => base44.entities.Timesheet.filter({ user_id: user.id }),
+    enabled: !!user?.id,
+  });
+
+  const currentWeekTimesheet = useMemo(
+    () => myTimesheets.find((sheet) => sheet.week_start === weekStart),
+    [myTimesheets, weekStart]
+  );
+  const isWeekLocked = currentWeekTimesheet?.status === 'approved' || currentWeekTimesheet?.status === 'revoke_pending';
 
   const { data: weekEntries = [] } = useQuery({
     queryKey: ['calendarEntries', user?.id, weekStart, weekEnd],
@@ -212,6 +233,52 @@ export default function CalendarView() {
     },
   });
 
+  const createRecurringEntries = useMutation({
+    mutationFn: async ({ basePayload, occurrences }) => {
+      const created = [];
+      for (const occurrence of occurrences) {
+        const entry = await base44.entities.TimeEntry.create(
+          toTimeEntryPayload({
+            ...basePayload,
+            start_at: occurrence.start_at,
+            end_at: occurrence.end_at,
+          })
+        );
+        created.push(entry);
+      }
+      return created;
+    },
+    onSuccess: async (entries) => {
+      invalidateCalendarQueries();
+      if (user && entries.length) {
+        const hours = (differenceInMinutes(form.end_at, form.start_at) / 60).toFixed(2);
+        await logActivity(
+          user,
+          'Logged recurring time',
+          'TimeEntry',
+          entries[0].id,
+          `${entries.length} entries (${hours}h each) for "${form.task_title}"`
+        );
+      }
+      toast({
+        title: 'Recurring entries created',
+        description: `${entries.length} calendar entries were added successfully.`,
+        centered: true,
+        duration: 3000,
+      });
+      setModalState({ open: false, mode: 'create', entryId: null });
+    },
+    onError: (error) => {
+      toast({
+        title: 'Could not create recurring entries',
+        description: error.message || 'Please try again.',
+        variant: 'destructive',
+        centered: true,
+        duration: 3000,
+      });
+    },
+  });
+
   const updateEntry = useMutation({
     mutationFn: ({ id, payload }) => base44.entities.TimeEntry.update(id, toTimeEntryPayload(payload)),
     onMutate: async ({ id, payload }) => {
@@ -232,6 +299,7 @@ export default function CalendarView() {
     },
     onSuccess: () => {
       invalidateCalendarQueries();
+      setModalState({ open: false, mode: 'create', entryId: null });
     },
   });
 
@@ -259,10 +327,8 @@ export default function CalendarView() {
 
       const hoveredColumn = document.elementFromPoint(event.clientX, event.clientY)?.closest?.('[data-day-column="true"]');
       const activeColumn = hoveredColumn || dayColumn;
-      const rect = activeColumn.getBoundingClientRect();
-      const offsetY = Math.max(0, Math.min(rect.height, event.clientY - rect.top));
-      const minuteValue = snapMinutes(offsetY / PX_PER_MINUTE);
       const dateKey = activeColumn.dataset.date;
+      const minuteValue = pointerClientYToMinutes(activeColumn, event.clientY);
 
       if (interaction.type === 'create') {
         const startMinutes = Math.min(interaction.startMinutes, minuteValue);
@@ -308,10 +374,10 @@ export default function CalendarView() {
 
       if (interaction.type === 'resize') {
         const startMinutes = interaction.edge === 'start'
-          ? Math.min(minuteValue, interaction.originalEndMinutes - 15)
+          ? Math.max(0, Math.min(minuteValue, interaction.originalEndMinutes - 15))
           : interaction.originalStartMinutes;
         const endMinutes = interaction.edge === 'end'
-          ? Math.max(minuteValue, interaction.originalStartMinutes + 15)
+          ? Math.min(MINUTES_IN_DAY, Math.max(minuteValue, interaction.originalStartMinutes + 15))
           : interaction.originalEndMinutes;
         const nextStartAt = buildDateTime(dateKey, startMinutes);
         const nextEndAt = buildDateTime(dateKey, endMinutes);
@@ -348,12 +414,18 @@ export default function CalendarView() {
         }
         setPreviewSelection(null);
       } else if (interaction.entry && interaction.pendingStartAt && interaction.pendingEndAt) {
-        const payload = {
-          ...createEntryForm(interaction.entry, user),
-          start_at: interaction.pendingStartAt,
-          end_at: interaction.pendingEndAt,
-        };
-        updateEntry.mutate({ id: interaction.entry.id, payload });
+        const { startAt, endAt } = interaction.entry;
+        const changed =
+          interaction.pendingStartAt.getTime() !== startAt.getTime() ||
+          interaction.pendingEndAt.getTime() !== endAt.getTime();
+        if (changed) {
+          const payload = {
+            ...createEntryForm(interaction.entry, user),
+            start_at: interaction.pendingStartAt,
+            end_at: interaction.pendingEndAt,
+          };
+          updateEntry.mutate({ id: interaction.entry.id, payload });
+        }
       } else {
         invalidateCalendarQueries();
       }
@@ -369,23 +441,33 @@ export default function CalendarView() {
     };
   }, [interaction, previewSelection, queryClient, updateEntry, user, weekEnd, weekStart]);
 
-  const openNewEntryModal = () => {
+  const buildNewEntryForm = () => {
     const now = new Date();
     const roundedMinutes = snapMinutes(now.getHours() * 60 + now.getMinutes());
     const roundedStart = buildDateTime(format(now, 'yyyy-MM-dd'), roundedMinutes);
-    setForm(createEntryForm({
+    return createEntryForm({
       start_at: roundedStart.toISOString(),
       end_at: addMinutes(roundedStart, 60).toISOString(),
       date: format(now, 'yyyy-MM-dd'),
-    }, user));
+    }, user);
+  };
+
+  const openNewEntryModal = () => {
+    if (isWeekLocked) return;
+    setForm(buildNewEntryForm());
+    setModalState({ open: true, mode: 'create', entryId: null });
+  };
+
+  const applyTicketToCalendar = (ticketDraft) => {
+    setForm(buildCalendarFormFromTicket(ticketDraft, buildNewEntryForm(), projects));
     setModalState({ open: true, mode: 'create', entryId: null });
   };
 
   const startCreateSelection = (event, date) => {
+    if (isWeekLocked) return;
     if (event.button !== 0) return;
     const dayColumn = event.currentTarget;
-    const rect = dayColumn.getBoundingClientRect();
-    const minuteValue = snapMinutes((event.clientY - rect.top) / PX_PER_MINUTE);
+    const minuteValue = pointerClientYToMinutes(dayColumn, event.clientY);
     const dateKey = format(date, 'yyyy-MM-dd');
     setPreviewSelection({
       date: dateKey,
@@ -403,11 +485,15 @@ export default function CalendarView() {
   };
 
   const startMoveEntry = (event, entry) => {
+    if (isWeekLocked) return;
+    event.preventDefault();
+    event.stopPropagation();
     const dayColumn = event.currentTarget.closest('[data-day-column="true"]');
-    const rect = dayColumn?.getBoundingClientRect();
     const { startAt, endAt } = entry;
     const entryStartMinutes = startAt.getHours() * 60 + startAt.getMinutes();
-    const pointerMinutes = rect ? snapMinutes((event.clientY - rect.top) / PX_PER_MINUTE) : entryStartMinutes;
+    const pointerMinutes = dayColumn
+      ? pointerClientYToMinutes(dayColumn, event.clientY)
+      : entryStartMinutes;
     setInteraction({
       type: 'move',
       entry,
@@ -420,6 +506,9 @@ export default function CalendarView() {
   };
 
   const startResizeEntry = (event, entry, edge) => {
+    if (isWeekLocked) return;
+    event.preventDefault();
+    event.stopPropagation();
     const dayColumn = event.currentTarget.closest('[data-day-column="true"]');
     const { startAt, endAt } = entry;
     setInteraction({
@@ -436,6 +525,7 @@ export default function CalendarView() {
   };
 
   const openEntry = (entry) => {
+    if (isWeekLocked) return;
     setForm(createEntryForm(entry, user));
     setModalState({ open: true, mode: 'edit', entryId: entry.id });
   };
@@ -451,9 +541,31 @@ export default function CalendarView() {
 
     if (modalState.mode === 'edit' && modalState.entryId) {
       updateEntry.mutate({ id: modalState.entryId, payload });
-    } else {
-      createEntry.mutate(payload);
+      return;
     }
+
+    if (form.recurring_enabled) {
+      const occurrences = buildRecurringOccurrences({
+        startAt: form.start_at,
+        endAt: form.end_at,
+        recurringEndDate: form.recurring_end_date,
+        recurringDays: form.recurring_days,
+      });
+
+      if (!occurrences.length) {
+        toast({
+          title: 'Invalid recurring setup',
+          description: 'Choose at least one repeat day and an end date on or after the start date.',
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      createRecurringEntries.mutate({ basePayload: payload, occurrences });
+      return;
+    }
+
+    createEntry.mutate(payload);
   };
 
   return (
@@ -464,10 +576,24 @@ export default function CalendarView() {
             title="Calendar"
             description="Clockify-style weekly planning with drag-create, move, resize, and project-linked time entries."
           />
-          <Button onClick={openNewEntryModal} className="gap-2 flex-shrink-0">
+          <Button onClick={openNewEntryModal} disabled={isWeekLocked} className="gap-2 flex-shrink-0">
             <Plus className="w-4 h-4" /> Add Entry
           </Button>
         </div>
+
+        {isWeekLocked ? (
+          <div className="flex items-start gap-3 rounded-xl border border-slate-300 bg-slate-100 px-4 py-3 text-sm text-slate-700">
+            <Lock className="mt-0.5 h-4 w-4 shrink-0" />
+            <div>
+              <p className="font-semibold text-slate-900">This week is locked</p>
+              <p className="mt-1 text-xs text-slate-600">
+                {currentWeekTimesheet?.status === 'revoke_pending'
+                  ? 'Your revocation request is waiting for admin approval. The calendar will unlock if your admin approves it.'
+                  : 'Your timesheet for this week has been approved. Request revocation from My Timesheets within 1 day of approval to ask your admin to unlock it.'}
+              </p>
+            </div>
+          </div>
+        ) : null}
 
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-card p-4">
           <div className="flex items-center gap-2">
@@ -510,6 +636,7 @@ export default function CalendarView() {
             entries={hydratedWeekEntries}
             previewSelection={previewSelection}
             currentTime={weekDates.some((date) => isSameDay(date, currentTime)) ? currentTime : null}
+            readOnly={isWeekLocked}
             onPointerDownCreate={startCreateSelection}
             onPointerDownMove={startMoveEntry}
             onPointerDownResize={startResizeEntry}
@@ -517,6 +644,12 @@ export default function CalendarView() {
           />
         </div>
       </PageShell>
+
+      <VoiceTicketDialog
+        open={voiceDialogOpen}
+        onOpenChange={setVoiceDialogOpen}
+        onApplyToCalendar={applyTicketToCalendar}
+      />
 
       <CalendarEntryModal
         open={modalState.open}
@@ -531,8 +664,9 @@ export default function CalendarView() {
         onClose={() => setModalState({ open: false, mode: 'create', entryId: null })}
         onSave={saveEntry}
         onDelete={modalState.entryId ? () => deleteEntry.mutate(modalState.entryId) : null}
-        isSaving={createEntry.isPending || updateEntry.isPending}
+        isSaving={createEntry.isPending || createRecurringEntries.isPending || updateEntry.isPending}
         isDeleting={deleteEntry.isPending}
+        onOpenVoiceTicket={() => setVoiceDialogOpen(true)}
       />
     </div>
   );

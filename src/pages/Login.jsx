@@ -82,7 +82,7 @@ export default function Login() {
       <AuthLayout
         icon={null}
         topImage={khonoImage}
-        topImageAlt="Khonofy"
+        topImageAlt="Khonology - Khonofy"
         topImageClassName="w-[22.05rem] sm:w-[25.2rem]"
         title="KHONOFY"
         subtitle="Smart time tracking, task management & reporting platform for teams"

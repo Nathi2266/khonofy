@@ -7,7 +7,7 @@ import PageShell from '@/components/PageShell';
 import SectionLoader from '@/components/SectionLoader';
 import { Input } from '@/components/ui/input';
 import TimesheetEntriesPanel from '@/components/timesheets/TimesheetEntriesPanel';
-import { Search, ChevronDown, CheckCircle2, XCircle, Clock, AlertCircle, ShieldCheck } from 'lucide-react';
+import { Search, ChevronDown, CheckCircle2, XCircle, Clock, AlertCircle, ShieldCheck, Building2 } from 'lucide-react';
 
 const STATUS_TABS = ['pending', 'approved', 'rejected', 'all'];
 
@@ -46,6 +46,33 @@ export default function SuperuserTimesheetFeedback() {
     },
     enabled: !!user && isSuperuser,
   });
+
+  const { data: departments = [] } = useQuery({
+    queryKey: ['departments'],
+    queryFn: () => base44.entities.Department.list(),
+    enabled: !!user && isSuperuser,
+  });
+
+  const { data: staffUsers = [] } = useQuery({
+    queryKey: ['staffUsers', 'superuser-feedback'],
+    queryFn: () => base44.entities.User.filter({ role: 'staff' }),
+    enabled: !!user && isSuperuser,
+  });
+
+  const departmentsById = useMemo(
+    () => Object.fromEntries(departments.map((department) => [department.id, department])),
+    [departments]
+  );
+
+  const staffById = useMemo(
+    () => Object.fromEntries(staffUsers.map((staffUser) => [staffUser.id, staffUser])),
+    [staffUsers]
+  );
+
+  const resolveDepartmentName = (timesheet) => {
+    const departmentId = timesheet.department_id || staffById[timesheet.user_id]?.department_id;
+    return departmentsById[departmentId]?.name || 'Unassigned';
+  };
 
   const sortedTimesheets = useMemo(() => {
     return [...allTimesheets].sort((left, right) => {
@@ -123,25 +150,32 @@ export default function SuperuserTimesheetFeedback() {
         {filtered.map((timesheet) => {
           const entries = entriesBySheet[timesheet.id] || [];
           const isOpen = expanded === timesheet.id;
+          const departmentName = resolveDepartmentName(timesheet);
           return (
             <div key={timesheet.id} className="overflow-hidden rounded-xl border border-border bg-card">
               <button
                 type="button"
-                className="w-full p-5 text-left transition-colors hover:bg-muted/20"
+                className="w-full p-4 text-left transition-colors hover:bg-muted/20"
                 onClick={() => setExpanded(isOpen ? null : timesheet.id)}
               >
-                <div className="flex flex-wrap items-start justify-between gap-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-3">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
+                      <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
                         {(timesheet.user_name || 'U')[0].toUpperCase()}
                       </div>
                       <div className="min-w-0">
-                        <p className="truncate text-sm font-semibold text-foreground">{timesheet.user_name || 'Unknown submitter'}</p>
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                          <p className="truncate text-sm font-semibold text-foreground">{timesheet.user_name || 'Unknown submitter'}</p>
+                          <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                            <Building2 className="h-3 w-3" />
+                            {departmentName}
+                          </span>
+                        </div>
                         <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
                           <span className="inline-flex items-center gap-1">
                             <Clock className="h-3 w-3" />
-                            {timesheet.total_hours || 0}h total
+                            {Number(timesheet.total_hours || 0).toFixed(1)}h
                           </span>
                           <span>Submitted: {timesheet.submitted_at ? new Date(timesheet.submitted_at).toLocaleString() : 'Not submitted'}</span>
                           <span>Reviewed by: {timesheet.reviewed_by_name || 'Awaiting admin review'}</span>
@@ -158,23 +192,15 @@ export default function SuperuserTimesheetFeedback() {
               </button>
 
               {isOpen ? (
-                <div className="border-t border-border bg-muted/20 px-5 pb-5 pt-4">
-                  <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-4">
-                    <MetaTile label="Staff User" value={timesheet.user_name || 'Unknown'} />
-                    <MetaTile label="Week Range" value={`${new Date(timesheet.week_start).toLocaleDateString()} - ${new Date(timesheet.week_end).toLocaleDateString()}`} />
-                    <MetaTile label="Approved / Rejected By" value={timesheet.reviewed_by_name || 'Awaiting review'} />
-                    <MetaTile label="Department" value={timesheet.department_id || '—'} />
-                  </div>
-
+                <div className="border-t border-border bg-muted/20 px-4 pb-4 pt-3">
                   {timesheet.admin_notes ? (
-                    <div className={`mb-4 rounded-lg border px-4 py-3 text-sm ${timesheet.status === 'rejected' ? 'border-red-200 bg-red-50 text-red-700' : 'border-emerald-200 bg-emerald-50 text-emerald-700'}`}>
+                    <div className={`mb-3 rounded-lg border px-4 py-3 text-sm ${timesheet.status === 'rejected' ? 'border-red-200 bg-red-50 text-red-700' : 'border-emerald-200 bg-emerald-50 text-emerald-700'}`}>
                       <p className="font-semibold">{timesheet.status === 'rejected' ? 'Rejection note' : 'Reviewer note'}</p>
                       <p className="mt-1">{timesheet.admin_notes}</p>
                     </div>
                   ) : null}
 
-                  <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Timesheet entries</p>
-                  <TimesheetEntriesPanel entries={entries} />
+                  <TimesheetEntriesPanel entries={entries} compact />
                 </div>
               ) : null}
             </div>
@@ -211,15 +237,6 @@ function SummaryCard({ label, value, icon: Icon, tone }) {
           <p className="text-2xl font-bold text-foreground">{value}</p>
         </div>
       </div>
-    </div>
-  );
-}
-
-function MetaTile({ label, value }) {
-  return (
-    <div className="rounded-lg border border-border bg-background px-4 py-3">
-      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
-      <p className="mt-1 text-sm font-medium text-foreground">{value}</p>
     </div>
   );
 }

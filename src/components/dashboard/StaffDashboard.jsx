@@ -49,7 +49,7 @@ export default function StaffDashboard({ user }) {
               No admin has been allocated to you yet
             </p>
             <p className="text-xs text-blue-700 mt-1">
-              Your super admin has not allocated an admin to you yet. You can still log time and submit timesheets; an admin will review your work once you are assigned.
+              Your super admin has not allocated an admin to you yet. You can log time on your calendar, but you cannot submit timesheets for approval until an admin is assigned.
             </p>
           </div>
         </div>

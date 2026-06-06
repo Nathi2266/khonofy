@@ -20,7 +20,7 @@ import {
   serializeRecord,
   toCamelCase,
 } from './lib/serialize.js';
-import { generateAssistantReply, isAiConfigured, parseUsersFromImportDocument } from './lib/ai.js';
+import { generateAssistantReply, generateVoiceTicketDraft, isAiConfigured, parseUsersFromImportDocument } from './lib/ai.js';
 
 const app = express();
 
@@ -158,6 +158,144 @@ async function validateUserAdminAssignment({ role, adminId }) {
   }
 }
 
+async function assertStaffCanSubmitTimesheet(user) {
+  if (user.role !== 'staff') return;
+
+  const staffUser = await prisma.user.findUnique({ where: { id: user.id } });
+  if (!staffUser?.adminId) {
+    throw Object.assign(
+      new Error('You cannot submit a timesheet until an admin has been assigned to you.'),
+      { statusCode: 403 }
+    );
+  }
+}
+
+async function assertStaffMeetsHourTarget(user, totalHours) {
+  if (user.role !== 'staff') return;
+
+  const staffUser = await prisma.user.findUnique({ where: { id: user.id } });
+  if (!staffUser?.departmentId) return;
+
+  const department = await prisma.department.findUnique({ where: { id: staffUser.departmentId } });
+  const target = Number(department?.weeklyHourTarget || 0);
+  if (!target) return;
+
+  if (Number(totalHours || 0) < target) {
+    throw Object.assign(
+      new Error(`You must log at least ${target}h before submitting this timesheet.`),
+      { statusCode: 403 }
+    );
+  }
+}
+
+async function assertTimesheetWeekEditable(userId, date) {
+  if (!userId || !date) return;
+
+  const day = startOfDayUtc(date instanceof Date ? date : parseDateOnly(date));
+  const timesheet = await prisma.timesheet.findFirst({
+    where: {
+      userId,
+      weekStart: { lte: day },
+      weekEnd: { gte: day },
+      status: { in: ['approved', 'revoke_pending'] },
+    },
+  });
+
+  if (timesheet) {
+    const message = timesheet.status === 'revoke_pending'
+      ? 'This calendar week is locked while your revocation request is waiting for admin approval.'
+      : 'This calendar week is locked because your timesheet has been approved. Request a revocation to make changes.';
+    throw Object.assign(new Error(message), { statusCode: 403 });
+  }
+}
+
+const TIMESHEET_REVOKE_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+function getTimesheetReviewedAt(timesheet) {
+  return timesheet.reviewedAt || timesheet.updatedAt || null;
+}
+
+function canStaffRevokeApprovedTimesheet(timesheet) {
+  if (timesheet.status !== 'approved') return false;
+  const reviewedAt = getTimesheetReviewedAt(timesheet);
+  if (!reviewedAt) return false;
+  return Date.now() - reviewedAt.getTime() <= TIMESHEET_REVOKE_WINDOW_MS;
+}
+
+async function applyStaffTimesheetStatusChange(existing, payload, user) {
+  if (user.role !== 'staff' || existing.userId !== user.id || payload.status === undefined) {
+    return payload;
+  }
+
+  const nextStatus = payload.status;
+  if (nextStatus === existing.status) return payload;
+
+  if (existing.status === 'pending' && nextStatus === 'draft') {
+    return {
+      ...payload,
+      submittedAt: null,
+      reviewedBy: null,
+      reviewedByName: null,
+      reviewedAt: null,
+      adminNotes: null,
+      withdrawnAt: new Date(),
+    };
+  }
+
+  if (existing.status === 'approved' && nextStatus === 'revoke_pending') {
+    if (!canStaffRevokeApprovedTimesheet(existing)) {
+      throw Object.assign(
+        new Error('You can only request revocation of an approved timesheet within 1 day of approval.'),
+        { statusCode: 403 }
+      );
+    }
+
+    return {
+      ...payload,
+      revokeRequestedAt: new Date(),
+    };
+  }
+
+  if (
+    (existing.status === 'draft' && nextStatus === 'pending')
+    || (existing.status === 'rejected' && nextStatus === 'pending')
+  ) {
+    return payload;
+  }
+
+  throw Object.assign(new Error('Forbidden timesheet status change'), { statusCode: 403 });
+}
+
+async function applyAdminTimesheetStatusChange(existing, payload, user) {
+  if (!(isAdmin(user) || isSuperuser(user)) || payload.status === undefined) {
+    return payload;
+  }
+
+  if (existing.status !== 'revoke_pending') return payload;
+
+  if (payload.status === 'draft') {
+    return {
+      ...payload,
+      submittedAt: null,
+      reviewedBy: null,
+      reviewedByName: null,
+      reviewedAt: null,
+      adminNotes: null,
+      revokeRequestedAt: null,
+      revokedAt: new Date(),
+    };
+  }
+
+  if (payload.status === 'approved') {
+    return {
+      ...payload,
+      revokeRequestedAt: null,
+    };
+  }
+
+  return payload;
+}
+
 async function scopeWhere(resource, user) {
   if (isSuperuser(user)) return {};
 
@@ -211,15 +349,6 @@ async function scopeWhere(resource, user) {
     case 'clients':
       return {};
     case 'projects':
-      if (user?.role === 'staff' && user.departmentId) {
-        return {
-          isActive: true,
-          OR: [
-            { departmentId: user.departmentId },
-            { departmentId: null },
-          ],
-        };
-      }
       if (user?.role === 'staff') {
         return { isActive: true };
       }
@@ -670,6 +799,9 @@ async function handleCreate(resource, user, body) {
     }
     required(normalizedEntry.startAt, 'startAt');
     required(normalizedEntry.endAt, 'endAt');
+    if (user.role === 'staff') {
+      await assertTimesheetWeekEditable(normalizedEntry.userId, normalizedEntry.date);
+    }
     await validateProjectAndClient(normalizedEntry);
     await assertNoTimeEntryOverlap(normalizedEntry);
     const record = await prisma[cfg.model].create({ data: normalizedEntry });
@@ -691,6 +823,10 @@ async function handleCreate(resource, user, body) {
     required(payload.weekEnd, 'weekEnd');
     if (!isSuperuser(user) && payload.userId !== user.id) throw new Error('Forbidden');
     if (!payload.departmentId && user.departmentId) payload.departmentId = user.departmentId;
+    if (!isSuperuser(user) && payload.status === 'pending') {
+      await assertStaffCanSubmitTimesheet(user);
+      await assertStaffMeetsHourTarget(user, payload.totalHours);
+    }
   }
 
   if (cfg.model === 'taskTemplate') {
@@ -783,7 +919,9 @@ async function handleUpdate(resource, user, id, body) {
     if (!canEdit) throw new Error('Forbidden');
   }
 
-  if (resource === 'departments' && !isSuperuser(user)) throw new Error('Forbidden');
+  if (resource === 'departments' && !(isSuperuser(user) || (isAdmin(user) && existing.id === user.departmentId))) {
+    throw new Error('Forbidden');
+  }
   if (resource === 'designations' && !isSuperuser(user)) throw new Error('Forbidden');
   if (resource === 'clients' && !isSuperuser(user)) throw new Error('Forbidden');
   if (resource === 'projects' && !(isSuperuser(user) || isAdmin(user))) throw new Error('Forbidden');
@@ -791,7 +929,7 @@ async function handleUpdate(resource, user, id, body) {
   if (resource === 'users' && !isSuperuser(user)) throw new Error('Forbidden');
   if (resource === 'activity-logs' && !(isSuperuser(user) || existing.userId === user.id)) throw new Error('Forbidden');
 
-  const payload = coerceDates(cfg.model, normalizeInput(body));
+  let payload = coerceDates(cfg.model, normalizeInput(body));
   if (cfg.model === 'task') {
     if (isAdmin(user) && payload.assignedTo) {
       if (!staffIds.includes(payload.assignedTo)) throw new Error('Forbidden');
@@ -822,6 +960,38 @@ async function handleUpdate(resource, user, id, body) {
     payload.name = await assertUniqueNamedResource(cfg.model, payload.name, id);
   }
 
+  if (cfg.model === 'department' && isAdmin(user) && !isSuperuser(user)) {
+    payload = {
+      weeklyHourTarget: payload.weeklyHourTarget ?? null,
+    };
+  }
+
+  if (cfg.model === 'timesheet') {
+    const nextStatus = payload.status !== undefined ? payload.status : existing.status;
+    if (!isSuperuser(user) && nextStatus === 'pending' && existing.status !== 'pending') {
+      await assertStaffCanSubmitTimesheet(user);
+      const totalHours = payload.totalHours !== undefined ? payload.totalHours : existing.totalHours;
+      await assertStaffMeetsHourTarget(user, totalHours);
+    }
+
+    if ((isAdmin(user) || isSuperuser(user)) && payload.status !== undefined) {
+      if (
+        (payload.status === 'approved' || payload.status === 'rejected')
+        && existing.status !== 'revoke_pending'
+      ) {
+        payload.reviewedAt = payload.reviewedAt || new Date();
+      }
+    }
+
+    if (user.role === 'staff' && existing.userId === user.id) {
+      payload = await applyStaffTimesheetStatusChange(existing, payload, user);
+    }
+
+    if (isAdmin(user) || isSuperuser(user)) {
+      payload = await applyAdminTimesheetStatusChange(existing, payload, user);
+    }
+  }
+
   if (cfg.model === 'timeEntry') {
     const previousTimesheetId = existing.timesheetId;
     const normalizedEntry = await assignDefaultTimeEntryWindow(deriveTimeEntryFields({
@@ -830,6 +1000,9 @@ async function handleUpdate(resource, user, id, body) {
     }), id);
     const hasTimesheetOverride = Object.prototype.hasOwnProperty.call(payload, 'timesheetId');
     const dateChanged = existing.date?.toISOString() !== normalizedEntry.date?.toISOString();
+    if (user.role === 'staff') {
+      await assertTimesheetWeekEditable(existing.userId, normalizedEntry.date);
+    }
     const linkedTimesheet = await resolveTimesheetForEntry(
       {
         userId: normalizedEntry.userId,
@@ -891,6 +1064,9 @@ async function handleDelete(resource, user, id) {
   }
 
   if (resource === 'time-entries') {
+    if (user.role === 'staff') {
+      await assertTimesheetWeekEditable(existing.userId, existing.date);
+    }
     const previousTimesheetId = existing.timesheetId;
     const record = await prisma[cfg.model].delete({ where: { id } });
     if (previousTimesheetId) {
@@ -1111,6 +1287,31 @@ app.post('/api/ai/chat', requireAuth, async (req, res) => {
     return res.json(response);
   } catch (error) {
     return sendError(res, error.statusCode || 400, error.message || 'AI request failed');
+  }
+});
+
+app.post('/api/ai/voice-ticket', requireAuth, async (req, res) => {
+  try {
+    if (!isAiConfigured()) {
+      return sendError(res, 503, 'AI assistant is not configured');
+    }
+
+    const payload = normalizeInput(req.body);
+    const transcript = String(payload.transcript || '').trim();
+    if (!transcript) {
+      return sendError(res, 400, 'Voice note is empty');
+    }
+
+    const projects = await listAiProjectsForUser(req.authUser);
+    const response = await generateVoiceTicketDraft({
+      user: req.authUser,
+      transcript,
+      projects,
+    });
+
+    return res.json(response);
+  } catch (error) {
+    return sendError(res, error.statusCode || 400, error.message || 'Voice ticket generation failed');
   }
 });
 

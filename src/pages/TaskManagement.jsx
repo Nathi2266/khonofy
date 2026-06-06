@@ -15,6 +15,7 @@ import {
   AlertDialogContent, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle
 } from '@/components/ui/alert-dialog';
 import { Plus, Search, Pencil, Trash2, CheckSquare } from 'lucide-react';
+import { toast } from '@/components/ui/use-toast';
 
 const PRIORITIES = ['low', 'medium', 'high', 'urgent'];
 const STATUSES = ['todo', 'in_progress', 'completed', 'blocked'];
@@ -67,7 +68,11 @@ export default function TaskManagement() {
 
   const { data: staffUsers = [] } = useQuery({
     queryKey: ['staffUsers', user?.id],
-    queryFn: () => base44.entities.User.filter({ role: 'staff' }),
+    queryFn: async () => {
+      const users = await base44.entities.User.filter({ role: 'staff' });
+      if (user?.role === 'admin') return users.filter((staffUser) => staffUser.admin_id === user.id);
+      return users;
+    },
     enabled: !!user,
   });
 
@@ -83,9 +88,18 @@ export default function TaskManagement() {
   const createTask = useMutation({
     mutationFn: (data) => base44.entities.Task.create(data),
     onSuccess: async (task) => {
-      queryClient.invalidateQueries({ queryKey: ['tasks'] });
-      if (user) await logActivity(user, 'Created task', 'Task', task.id, `"${task.title}"`);
+      await queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      await queryClient.invalidateQueries({ queryKey: ['myTasks'] });
       closeForm();
+      toast({
+        title: 'Task created',
+        description: task.assigned_to_name
+          ? `"${task.title}" was assigned to ${task.assigned_to_name}.`
+          : `"${task.title}" was created successfully.`,
+        centered: true,
+        duration: 3000,
+      });
+      if (user) await logActivity(user, 'Created task', 'Task', task.id, `"${task.title}"`);
     },
   });
 
@@ -130,6 +144,7 @@ export default function TaskManagement() {
     if (!form.title.trim()) return;
     const payload = {
       ...form,
+      created_by_id: user?.id,
       department_id: user?.department_id || '',
       estimated_hours: form.estimated_hours ? parseFloat(form.estimated_hours) : undefined,
     };
@@ -252,7 +267,7 @@ export default function TaskManagement() {
 
       {/* Create/Edit Dialog */}
       <Dialog open={showForm} onOpenChange={closeForm}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle>{editingTask ? 'Edit Task' : 'Create New Task'}</DialogTitle>
           </DialogHeader>

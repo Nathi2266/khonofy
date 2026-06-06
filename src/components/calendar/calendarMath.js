@@ -8,11 +8,31 @@ import {
   startOfDay,
   startOfWeek,
 } from 'date-fns';
+import { getUiScale } from '@/lib/ui-scale';
 
 export const MINUTES_IN_DAY = 24 * 60;
 export const SNAP_MINUTES = 15;
 export const HOUR_HEIGHT = 64;
 export const PX_PER_MINUTE = HOUR_HEIGHT / 60;
+
+export function getLayoutScaleFactor() {
+  return getUiScale();
+}
+
+export function getPointerLayoutOffsetY(element, clientY) {
+  if (!element) return 0;
+
+  const scale = getLayoutScaleFactor();
+  const rect = element.getBoundingClientRect();
+  const layoutHeight = rect.height / scale;
+  const layoutOffsetY = (clientY - rect.top) / scale;
+
+  return Math.max(0, Math.min(layoutHeight, layoutOffsetY));
+}
+
+export function pointerClientYToMinutes(element, clientY) {
+  return snapMinutes(getPointerLayoutOffsetY(element, clientY) / PX_PER_MINUTE);
+}
 
 export function snapMinutes(value) {
   const snapped = Math.round(value / SNAP_MINUTES) * SNAP_MINUTES;

@@ -124,6 +124,11 @@ const ai = {
       method: 'POST',
       body: { messages },
     }),
+  generateVoiceTicket: (transcript) =>
+    request('/api/ai/voice-ticket', {
+      method: 'POST',
+      body: { transcript },
+    }),
   logTicket: (ticketDraft) =>
     request('/api/ai/log-ticket', {
       method: 'POST',

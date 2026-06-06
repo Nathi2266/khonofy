@@ -1,21 +1,59 @@
+import { useRef } from 'react';
 import { cn } from '@/lib/utils';
 import { formatRangeLabel } from './calendarMath';
+
+const DRAG_CLICK_THRESHOLD = 6;
 
 export default function CalendarEntryBlock({
   entry,
   onPointerDownMove,
   onPointerDownResize,
   onOpen,
+  readOnly = false,
 }) {
+  const pointerStartRef = useRef(null);
   const widthPercent = 100 / Math.max(entry.columnCount || 1, 1);
   const leftPercent = widthPercent * (entry.columnIndex || 0);
+  const handleInset = entry.height < 36 ? 6 : 12;
+
+  const handleMovePointerDown = (event) => {
+    if (readOnly) return;
+    event.stopPropagation();
+    pointerStartRef.current = { x: event.clientX, y: event.clientY };
+    onPointerDownMove(event, entry);
+  };
+
+  const handleOpen = (event) => {
+    if (readOnly) return;
+    event.stopPropagation();
+    const start = pointerStartRef.current;
+    pointerStartRef.current = null;
+    if (!start) {
+      onOpen(entry);
+      return;
+    }
+    const moved =
+      Math.abs(event.clientX - start.x) > DRAG_CLICK_THRESHOLD ||
+      Math.abs(event.clientY - start.y) > DRAG_CLICK_THRESHOLD;
+    if (!moved) {
+      onOpen(entry);
+    }
+  };
+
+  const handleResizePointerDown = (event, edge) => {
+    if (readOnly) return;
+    event.preventDefault();
+    event.stopPropagation();
+    pointerStartRef.current = null;
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    onPointerDownResize(event, entry, edge);
+  };
 
   return (
-    <button
-      type="button"
+    <div
       className={cn(
-        'absolute rounded-lg border border-white/20 px-2 py-1 text-left text-white shadow-md transition-transform hover:scale-[1.01]',
-        'focus:outline-none focus:ring-2 focus:ring-white/60'
+        'group absolute overflow-hidden rounded-lg border border-white/20 text-left text-white shadow-md',
+        'transition-shadow hover:shadow-lg'
       )}
       style={{
         top: entry.top,
@@ -24,24 +62,24 @@ export default function CalendarEntryBlock({
         width: `calc(${widthPercent}% - 4px)`,
         backgroundColor: entry.project_color || entry.tag_color || '#6366f1',
       }}
-      onClick={(event) => {
-        event.stopPropagation();
-        onOpen(entry);
-      }}
     >
-      <span
-        className="absolute left-1 right-1 top-0 h-2 cursor-ns-resize rounded-t-md"
-        onPointerDown={(event) => {
-          event.stopPropagation();
-          onPointerDownResize(event, entry, 'start');
-        }}
-      />
       <div
-        className="h-full cursor-grab overflow-hidden active:cursor-grabbing"
-        onPointerDown={(event) => {
-          event.stopPropagation();
-          onPointerDownMove(event, entry);
-        }}
+        role="separator"
+        aria-orientation="horizontal"
+        aria-label="Resize start time"
+        className="absolute inset-x-0 top-0 z-20 cursor-ns-resize touch-none hover:bg-white/10"
+        style={{ height: handleInset }}
+        onPointerDown={(event) => handleResizePointerDown(event, 'start')}
+      >
+        <span className="mx-auto mt-0.5 block h-1 w-8 rounded-full bg-white/40 group-hover:bg-white/60" />
+      </div>
+
+      <button
+        type="button"
+        className="absolute inset-x-0 z-10 cursor-grab overflow-hidden px-2 py-0.5 text-left active:cursor-grabbing"
+        style={{ top: handleInset, bottom: handleInset }}
+        onPointerDown={handleMovePointerDown}
+        onClick={handleOpen}
       >
         <div className="truncate text-xs font-semibold">{entry.task_title || 'Time Entry'}</div>
         <div className="truncate text-[11px] opacity-90">{formatRangeLabel(entry.startAt, entry.endAt)}</div>
@@ -51,14 +89,18 @@ export default function CalendarEntryBlock({
             Billable
           </span>
         ) : null}
+      </button>
+
+      <div
+        role="separator"
+        aria-orientation="horizontal"
+        aria-label="Resize end time"
+        className="absolute inset-x-0 bottom-0 z-20 cursor-ns-resize touch-none hover:bg-white/10"
+        style={{ height: handleInset }}
+        onPointerDown={(event) => handleResizePointerDown(event, 'end')}
+      >
+        <span className="mx-auto mb-0.5 block h-1 w-8 rounded-full bg-white/40 group-hover:bg-white/60" />
       </div>
-      <span
-        className="absolute bottom-0 left-1 right-1 h-2 cursor-ns-resize rounded-b-md"
-        onPointerDown={(event) => {
-          event.stopPropagation();
-          onPointerDownResize(event, entry, 'end');
-        }}
-      />
-    </button>
+    </div>
   );
 }

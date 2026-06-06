@@ -12,9 +12,10 @@ export default function CalendarWeekGrid({
   onPointerDownMove,
   onPointerDownResize,
   onOpenEntry,
+  readOnly = false,
 }) {
   return (
-    <div className="flex min-h-0 flex-1 overflow-auto rounded-xl border border-border bg-card">
+    <div className={`relative flex min-h-0 flex-1 overflow-auto rounded-xl border border-border bg-card ${readOnly ? 'opacity-70' : ''}`}>
       <CalendarTimeColumn />
       <div className="flex min-w-[980px] flex-1">
         {dates.map((date) => {
@@ -36,6 +37,7 @@ export default function CalendarWeekGrid({
               entries={laidOutEntries}
               previewBlock={previewBlock}
               currentTimeTop={currentTimeTop}
+              readOnly={readOnly}
               onPointerDownCreate={onPointerDownCreate}
               onPointerDownMove={onPointerDownMove}
               onPointerDownResize={onPointerDownResize}
@@ -44,6 +46,9 @@ export default function CalendarWeekGrid({
           );
         })}
       </div>
+      {readOnly ? (
+        <div className="pointer-events-none absolute inset-0 z-20 bg-muted/25 backdrop-grayscale" />
+      ) : null}
     </div>
   );
 }

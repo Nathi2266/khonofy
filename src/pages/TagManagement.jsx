@@ -451,7 +451,7 @@ export default function TagManagement() {
       </Dialog>
 
       <Dialog open={!!bulkDialog} onOpenChange={(open) => (open ? null : closeBulkDialog())}>
-        <DialogContent className="w-full max-w-sm sm:max-w-md">
+        <DialogContent className="w-full max-w-sm">
           <DialogHeader>
             <DialogTitle>
               {bulkDialog === 'department' ? 'Add Departments' : 'Add Designations'}

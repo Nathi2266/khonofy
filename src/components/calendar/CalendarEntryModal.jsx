@@ -1,11 +1,18 @@
 import { useMemo } from 'react';
 import { differenceInMinutes } from 'date-fns';
+import { Mic } from 'lucide-react';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { parseDateTimeInput, toDateInputValue, toTimeInputValue } from './calendarMath';
+import {
+  WEEKDAY_OPTIONS,
+  countRecurringOccurrences,
+  formatRecurringSummary,
+  normalizeRecurringEndDate,
+} from './recurringEntryUtils';
 
 export default function CalendarEntryModal({
   open,
@@ -22,6 +29,7 @@ export default function CalendarEntryModal({
   onDelete,
   isSaving,
   isDeleting,
+  onOpenVoiceTicket,
 }) {
   const filteredTasks = useMemo(() => {
     if (!form.project_id) return tasks;
@@ -134,10 +142,47 @@ export default function CalendarEntryModal({
   };
 
   const durationHours = Math.max(differenceInMinutes(form.end_at, form.start_at), 15) / 60;
+  const isRecurring = Boolean(form.recurring_enabled);
+  const recurringOccurrenceCount = isRecurring
+    ? countRecurringOccurrences({
+        startAt: form.start_at,
+        endAt: form.end_at,
+        recurringEndDate: form.recurring_end_date,
+        recurringDays: form.recurring_days,
+      })
+    : 0;
+
+  const toggleRecurringDay = (dayValue) => {
+    setForm((current) => {
+      const selected = new Set(current.recurring_days || []);
+      if (selected.has(dayValue)) {
+        selected.delete(dayValue);
+      } else {
+        selected.add(dayValue);
+      }
+      return {
+        ...current,
+        recurring_days: WEEKDAY_OPTIONS.map((option) => option.value).filter((value) => selected.has(value)),
+      };
+    });
+  };
+
+  const handleRecurringToggle = (enabled) => {
+    setForm((current) => ({
+      ...current,
+      recurring_enabled: enabled,
+      recurring_end_date: enabled
+        ? normalizeRecurringEndDate(current.start_at, current.recurring_end_date)
+        : current.recurring_end_date,
+      recurring_days: enabled && !(current.recurring_days || []).length
+        ? [current.start_at.getDay()]
+        : current.recurring_days,
+    }));
+  };
 
   return (
     <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) onClose(); }}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-lg max-h-[85dvh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{mode === 'edit' ? 'Edit Time Entry' : 'Create Time Entry'}</DialogTitle>
         </DialogHeader>
@@ -162,7 +207,21 @@ export default function CalendarEntryModal({
 
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <div className="md:col-span-2">
-              <label className="mb-1.5 block text-sm font-medium">Task Name</label>
+              <div className="mb-1.5 flex items-center justify-between gap-2">
+                <label className="block text-sm font-medium">Task Name</label>
+                {onOpenVoiceTicket ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 gap-1.5 px-2 text-xs"
+                    onClick={onOpenVoiceTicket}
+                  >
+                    <Mic className="h-3.5 w-3.5" />
+                    Voice ticket
+                  </Button>
+                ) : null}
+              </div>
               <Input
                 value={form.task_title}
                 onChange={(event) => setForm((current) => ({ ...current, task_title: event.target.value, task_id: '' }))}
@@ -228,7 +287,7 @@ export default function CalendarEntryModal({
               </select>
             </div>
 
-            <div>
+            <div className={isRecurring && mode === 'create' ? 'hidden' : ''}>
               <label className="mb-1.5 block text-sm font-medium">Date</label>
               <Input type="date" value={toDateInputValue(form.start_at)} onChange={(event) => handleDateChange(event.target.value)} />
             </div>
@@ -273,6 +332,89 @@ export default function CalendarEntryModal({
                 placeholder="Add notes for this time entry"
               />
             </div>
+
+            {mode === 'create' ? (
+              <div className="md:col-span-2 space-y-3 rounded-lg border border-border px-3 py-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-medium text-foreground">Recurring entry</p>
+                    <p className="text-xs text-muted-foreground">
+                      Repeat this entry on selected days between a start and end date.
+                    </p>
+                  </div>
+                  <Switch
+                    checked={isRecurring}
+                    onCheckedChange={handleRecurringToggle}
+                  />
+                </div>
+
+                {isRecurring ? (
+                  <div className="space-y-3 border-t border-border pt-3">
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      <div>
+                        <label className="mb-1.5 block text-sm font-medium">Repeat from</label>
+                        <Input
+                          type="date"
+                          value={toDateInputValue(form.start_at)}
+                          onChange={(event) => handleDateChange(event.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <label className="mb-1.5 block text-sm font-medium">Repeat until</label>
+                        <Input
+                          type="date"
+                          min={toDateInputValue(form.start_at)}
+                          value={toDateInputValue(form.recurring_end_date || form.start_at)}
+                          onChange={(event) => {
+                            const nextEnd = parseDateTimeInput(event.target.value, '00:00');
+                            setForm((current) => ({
+                              ...current,
+                              recurring_end_date: normalizeRecurringEndDate(current.start_at, nextEnd),
+                            }));
+                          }}
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="mb-2 block text-sm font-medium">Repeat on</label>
+                      <div className="flex flex-wrap gap-2">
+                        {WEEKDAY_OPTIONS.map((option) => {
+                          const selected = (form.recurring_days || []).includes(option.value);
+                          return (
+                            <button
+                              key={option.value}
+                              type="button"
+                              aria-pressed={selected}
+                              title={option.fullLabel}
+                              onClick={() => toggleRecurringDay(option.value)}
+                              className={`min-w-[44px] rounded-lg border px-3 py-2 text-xs font-semibold transition-colors ${
+                                selected
+                                  ? 'border-primary bg-primary text-primary-foreground'
+                                  : 'border-border bg-background text-foreground hover:border-primary/60'
+                              }`}
+                            >
+                              {option.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    <p className="text-xs text-muted-foreground">
+                      {recurringOccurrenceCount > 0
+                        ? formatRecurringSummary({
+                            startAt: form.start_at,
+                            recurringEndDate: form.recurring_end_date,
+                            recurringDays: form.recurring_days,
+                            occurrenceCount: recurringOccurrenceCount,
+                          })
+                        : 'Select at least one day and make sure the end date is on or after the start date.'}
+                    </p>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
           </div>
         </div>
         <DialogFooter className="flex flex-col gap-2 sm:flex-row sm:justify-between">
@@ -285,8 +427,21 @@ export default function CalendarEntryModal({
           </div>
           <div className="flex gap-2">
             <Button variant="outline" onClick={onClose}>Cancel</Button>
-            <Button onClick={onSave} disabled={isSaving || !form.task_title.trim()}>
-              {isSaving ? 'Saving...' : mode === 'edit' ? 'Save Changes' : 'Create Entry'}
+            <Button
+              onClick={onSave}
+              disabled={
+                isSaving
+                || !form.task_title.trim()
+                || (isRecurring && recurringOccurrenceCount === 0)
+              }
+            >
+              {isSaving
+                ? 'Saving...'
+                : mode === 'edit'
+                  ? 'Save Changes'
+                  : isRecurring
+                    ? `Create ${recurringOccurrenceCount} Entries`
+                    : 'Create Entry'}
             </Button>
           </div>
         </DialogFooter>

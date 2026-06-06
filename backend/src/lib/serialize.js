@@ -12,7 +12,7 @@ const ISO_FIELDS = {
   project: new Set(['createdAt', 'updatedAt']),
   task: new Set(['createdAt', 'updatedAt']),
   timeEntry: new Set(['createdAt', 'updatedAt', 'startAt', 'endAt']),
-  timesheet: new Set(['createdAt', 'updatedAt', 'submittedAt']),
+  timesheet: new Set(['createdAt', 'updatedAt', 'submittedAt', 'reviewedAt', 'withdrawnAt', 'revokedAt', 'revokeRequestedAt']),
   tag: new Set(['createdAt', 'updatedAt']),
   taskTemplate: new Set(['createdAt', 'updatedAt']),
   activityLog: new Set(['createdAt']),

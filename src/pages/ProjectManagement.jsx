@@ -17,7 +17,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Building2, FolderKanban, Pencil, Plus } from 'lucide-react';
+import { Building2, FolderKanban, Pencil, Plus, Clock, Users } from 'lucide-react';
 
 const EMPTY_CLIENT_FORM = { name: '', description: '', is_active: true };
 const EMPTY_PROJECT_FORM = {
@@ -42,6 +42,105 @@ function parseBulkNames(value) {
       seen.add(key);
       return true;
     });
+}
+
+function buildApprovedProjectStats(timeEntries, approvedTimesheets) {
+  const approvedTimesheetIds = new Set(
+    approvedTimesheets
+      .filter((sheet) => sheet.status === 'approved' || sheet.status === 'revoke_pending')
+      .map((sheet) => sheet.id)
+  );
+
+  const statsByProject = {};
+
+  for (const entry of timeEntries) {
+    if (!entry.project_id) continue;
+    if (!entry.timesheet_id || !approvedTimesheetIds.has(entry.timesheet_id)) continue;
+
+    const hours = Number(entry.hours || 0);
+    if (!statsByProject[entry.project_id]) {
+      statsByProject[entry.project_id] = { totalHours: 0, membersById: new Map() };
+    }
+
+    const projectStats = statsByProject[entry.project_id];
+    projectStats.totalHours += hours;
+
+    const memberId = entry.user_id || entry.user_name || 'unknown';
+    const existing = projectStats.membersById.get(memberId);
+    if (existing) {
+      existing.hours += hours;
+      if (!existing.userName && entry.user_name) existing.userName = entry.user_name;
+    } else {
+      projectStats.membersById.set(memberId, {
+        userId: entry.user_id || memberId,
+        userName: entry.user_name || 'Unknown',
+        hours,
+      });
+    }
+  }
+
+  return Object.fromEntries(
+    Object.entries(statsByProject).map(([projectId, stats]) => [
+      projectId,
+      {
+        totalHours: stats.totalHours,
+        members: [...stats.membersById.values()].sort((left, right) => right.hours - left.hours),
+      },
+    ])
+  );
+}
+
+function ProjectApprovedHoursWidget({ stats, loading }) {
+  if (loading) {
+    return (
+      <div className="mt-3 rounded-lg border border-border bg-muted/20 px-3 py-2.5 text-xs text-muted-foreground">
+        Loading approved hours...
+      </div>
+    );
+  }
+
+  if (!stats || stats.totalHours <= 0) {
+    return (
+      <div className="mt-3 rounded-lg border border-dashed border-border bg-muted/10 px-3 py-2.5">
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <Clock className="h-3.5 w-3.5" />
+          <span>No approved timesheet hours yet</span>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-3 rounded-lg border border-primary/15 bg-primary/5 px-3 py-3">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          <Clock className="h-3.5 w-3.5 text-primary" />
+          Approved hours
+        </div>
+        <span className="text-lg font-bold text-primary">{stats.totalHours.toFixed(1)}h</span>
+      </div>
+
+      {stats.members.length > 0 ? (
+        <div className="mt-2.5 space-y-2">
+          <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+            <Users className="h-3.5 w-3.5" />
+            Staff on this project
+          </div>
+          <div className="space-y-1.5">
+            {stats.members.map((member) => (
+              <div
+                key={member.userId}
+                className="flex items-center justify-between rounded-md border border-border/70 bg-background px-2.5 py-1.5 text-xs"
+              >
+                <span className="font-medium text-foreground">{member.userName}</span>
+                <span className="font-semibold text-primary">{member.hours.toFixed(1)}h</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 function EntitySection({ title, description, icon: Icon, children, action }) {
@@ -98,6 +197,25 @@ export default function ProjectManagement() {
     queryFn: () => base44.entities.Department.list(),
     enabled: canManage,
   });
+
+  const { data: timeEntries = [], isLoading: approvedEntriesLoading } = useQuery({
+    queryKey: ['projectApprovedStats', 'entries', user?.id, user?.role],
+    queryFn: () => base44.entities.TimeEntry.list(),
+    enabled: canManage,
+  });
+
+  const { data: approvedTimesheets = [], isLoading: approvedTimesheetsLoading } = useQuery({
+    queryKey: ['projectApprovedStats', 'timesheets', user?.id, user?.role],
+    queryFn: () => base44.entities.Timesheet.list(),
+    enabled: canManage,
+  });
+
+  const approvedStatsByProject = useMemo(
+    () => buildApprovedProjectStats(timeEntries, approvedTimesheets),
+    [timeEntries, approvedTimesheets]
+  );
+
+  const approvedHoursLoading = approvedEntriesLoading || approvedTimesheetsLoading;
 
   const activeClientMap = useMemo(
     () => new Map(clients.map((client) => [client.id, client])),
@@ -331,7 +449,7 @@ export default function ProjectManagement() {
 
         <EntitySection
           title="Projects"
-          description="Projects can carry a client, color, department, and default billable setting."
+          description="Projects can carry a client, color, department, and default billable setting. Approved timesheet hours are shown per project."
           icon={FolderKanban}
           action={(
             <Button onClick={openCreateProjectDialog} className="gap-2">
@@ -374,6 +492,10 @@ export default function ProjectManagement() {
                     <p>Department: {departments.find((department) => department.id === project.department_id)?.name || 'Shared'}</p>
                     <p>Billable default: {project.is_billable_default ? 'Yes' : 'No'}</p>
                   </div>
+                  <ProjectApprovedHoursWidget
+                    stats={approvedStatsByProject[project.id]}
+                    loading={approvedHoursLoading}
+                  />
                 </div>
               ))}
               {projects.length === 0 ? (
@@ -387,7 +509,7 @@ export default function ProjectManagement() {
       </div>
 
       <Dialog open={showClientDialog} onOpenChange={(open) => (open ? setShowClientDialog(true) : closeClientDialog())}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle>{editingClient ? 'Edit Client' : 'Create Client'}</DialogTitle>
           </DialogHeader>
@@ -433,7 +555,7 @@ export default function ProjectManagement() {
       </Dialog>
 
       <Dialog open={showProjectDialog} onOpenChange={(open) => (open ? setShowProjectDialog(true) : closeProjectDialog())}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>{editingProject ? 'Edit Project' : 'Create Project'}</DialogTitle>
           </DialogHeader>

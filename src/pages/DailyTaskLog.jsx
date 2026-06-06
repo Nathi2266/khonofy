@@ -460,7 +460,7 @@ export default function DailyTaskLog() {
 
       {/* Single Log Dialog */}
       <Dialog open={!!selectedTask} onOpenChange={() => setSelectedTask(null)}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-sm">
           <DialogHeader><DialogTitle>Log Time — {selectedTask?.title}</DialogTitle></DialogHeader>
           <div className="space-y-4 py-2">
             {templates.length > 0 && (
@@ -533,7 +533,7 @@ export default function DailyTaskLog() {
 
       {/* Bulk Log Dialog */}
       <Dialog open={showBulkLog} onOpenChange={() => setShowBulkLog(false)}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Layers className="w-5 h-5 text-primary" />

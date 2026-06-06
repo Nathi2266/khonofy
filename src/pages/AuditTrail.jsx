@@ -46,16 +46,16 @@ export default function AuditTrail() {
   });
 
   return (
-    <PageShell>
+    <PageShell className="flex min-h-[calc(100dvh-2rem)] flex-col gap-6">
       <PageHeader
         title="Audit Trail"
         description="Complete log of all user actions across the organization."
         icon={Activity}
       />
 
-      <div className="flex items-center gap-3 flex-wrap">
-        <div className="relative flex-1 min-w-48">
-          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="relative min-w-48 flex-1">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             placeholder="Search by user, action, or details..."
             className="pl-9"
@@ -64,9 +64,9 @@ export default function AuditTrail() {
           />
         </div>
         <div className="flex items-center gap-2">
-          <Filter className="w-4 h-4 text-muted-foreground" />
+          <Filter className="h-4 w-4 text-muted-foreground" />
           <select
-            className="text-sm border border-border rounded-lg px-3 py-2 bg-background"
+            className="rounded-lg border border-border bg-background px-3 py-2 text-sm"
             value={entityFilter}
             onChange={(e) => setEntityFilter(e.target.value)}
           >
@@ -78,8 +78,8 @@ export default function AuditTrail() {
         <p className="text-sm text-muted-foreground">{filtered.length} records</p>
       </div>
 
-      <div className="bg-card rounded-xl border border-border overflow-hidden">
-        <div className="grid grid-cols-[160px_1fr_120px_1fr_140px] gap-4 px-4 py-3 border-b border-border bg-muted/30 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-border bg-card">
+        <div className="grid grid-cols-[160px_minmax(140px,1fr)_140px_minmax(220px,2fr)_140px] gap-4 border-b border-border bg-muted/30 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           <span>Timestamp</span>
           <span>User</span>
           <span>Action Type</span>
@@ -87,35 +87,40 @@ export default function AuditTrail() {
           <span>Entity</span>
         </div>
         {isLoading ? <SectionLoader label="Loading audit log..." /> : null}
-        <div className="divide-y divide-border max-h-[600px] overflow-y-auto">
+        <div className="min-h-0 flex-1 divide-y divide-border overflow-y-auto">
           {filtered.map(log => (
-            <div key={log.id} className="grid grid-cols-[160px_1fr_120px_1fr_140px] gap-4 px-4 py-3 items-start hover:bg-muted/20 transition-colors text-sm">
-              <span className="text-xs text-muted-foreground font-mono">
+            <div
+              key={log.id}
+              className="grid grid-cols-[160px_minmax(140px,1fr)_140px_minmax(220px,2fr)_140px] items-start gap-4 px-4 py-3 text-sm transition-colors hover:bg-muted/20"
+            >
+              <span className="font-mono text-xs text-muted-foreground">
                 {new Date(log.created_date).toLocaleString()}
               </span>
-              <div>
-                <p className="font-medium text-foreground leading-tight">{log.user_name || 'Unknown'}</p>
-                {log.department_id && (
-                  <p className="text-xs text-muted-foreground mt-0.5">{log.department_id}</p>
-                )}
+              <div className="min-w-0">
+                <p className="font-medium leading-tight text-foreground">{log.user_name || 'Unknown'}</p>
+                {log.department_id ? (
+                  <p className="mt-0.5 text-xs text-muted-foreground">{log.department_id}</p>
+                ) : null}
               </div>
-              <span className={`text-xs font-medium px-2 py-0.5 rounded-full w-fit ${getActionColor(log.action)}`}>
+              <span className={`w-fit rounded-full px-2 py-0.5 text-xs font-medium ${getActionColor(log.action)}`}>
                 {log.action}
               </span>
-              <span className="text-muted-foreground text-xs truncate">{log.details || '—'}</span>
+              <span className="break-words text-xs text-muted-foreground">{log.details || '—'}</span>
               <span className="text-xs text-muted-foreground">
                 {log.entity_type || '—'}
-                {log.entity_id && <span className="text-muted-foreground/60 ml-1 font-mono">{log.entity_id.slice(0, 8)}</span>}
+                {log.entity_id ? (
+                  <span className="ml-1 font-mono text-muted-foreground/60">{log.entity_id.slice(0, 8)}</span>
+                ) : null}
               </span>
             </div>
           ))}
-          {filtered.length === 0 && !isLoading && (
-            <div className="text-center py-12">
-              <Activity className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
+          {filtered.length === 0 && !isLoading ? (
+            <div className="py-12 text-center">
+              <Activity className="mx-auto mb-3 h-10 w-10 text-muted-foreground/30" />
               <p className="font-medium text-foreground">No activity found</p>
-              <p className="text-muted-foreground text-sm">Activity will appear here as users interact with the system.</p>
+              <p className="text-sm text-muted-foreground">Activity will appear here as users interact with the system.</p>
             </div>
-          )}
+          ) : null}
         </div>
       </div>
     </PageShell>

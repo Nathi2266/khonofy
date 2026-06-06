@@ -82,7 +82,7 @@ function matchProject(ticketDraft, projects) {
   return projects.find((project) => normalizeText(project.name).toLowerCase() === normalizedProjectName) || null;
 }
 
-function normalizeTicketDraft(ticketDraft, projects) {
+function normalizeTicketDraft(ticketDraft, projects, { requireTimeframe = true } = {}) {
   if (!ticketDraft || typeof ticketDraft !== 'object') return null;
 
   const matchedProject = matchProject(ticketDraft, projects);
@@ -92,7 +92,10 @@ function normalizeTicketDraft(ticketDraft, projects) {
   const dueDate = /^\d{4}-\d{2}-\d{2}$/.test(String(ticketDraft.dueDate || '')) ? ticketDraft.dueDate : null;
   const estimatedHours = Number(ticketDraft.estimatedHours);
   const priority = VALID_PRIORITIES.has(ticketDraft.priority) ? ticketDraft.priority : 'medium';
-  const readyToLog = Boolean(title && description && (timeframeLabel || dueDate) && ticketDraft.readyToLog);
+  const hasTimeframe = Boolean(timeframeLabel || dueDate);
+  const readyToLog = requireTimeframe
+    ? Boolean(title && description && hasTimeframe && ticketDraft.readyToLog)
+    : Boolean(title && description && ticketDraft.readyToLog);
 
   return {
     title,
@@ -110,6 +113,97 @@ function normalizeTicketDraft(ticketDraft, projects) {
 function parseJsonResponse(content) {
   const clean = stripCodeFence(content);
   return JSON.parse(clean);
+}
+
+function buildVoiceTicketSystemPrompt(user, projects) {
+  return [
+    'You are the Khonofy calendar voice-ticket assistant.',
+    'The user recorded a casual spoken note about work they want to log on their calendar.',
+    'Your job is to transform that raw voice note into a clean, professional calendar ticket.',
+    '',
+    'TITLE rules:',
+    '- Write a short, clear, action-oriented title (3 to 12 words).',
+    '- Start with a strong verb when possible (Fix, Review, Update, Prepare, Investigate, Complete).',
+    '- Remove filler words, hesitations, and casual speech patterns.',
+    '- Capture the core task only — not the full spoken sentence.',
+    '',
+    'DESCRIPTION rules:',
+    '- Write 2 to 4 complete sentences in a professional workplace tone.',
+    '- Explain what needs to be done, relevant context, and expected outcome if mentioned.',
+    '- Rewrite clearly — do not copy the spoken note verbatim.',
+    '- Do not invent facts that were not mentioned in the voice note.',
+    '- Include client names, systems, deadlines, or blockers only if the user mentioned them.',
+    '',
+    'Also extract when mentioned: project, estimated hours, timeframe, priority.',
+    'Match project names against the available projects list below.',
+    '',
+    'If the voice note is too vague to produce both a proper title and description, ask direct follow-up questions in reply and set ticketDraft.readyToLog to false.',
+    'If you can produce a proper title and description, set ticketDraft.readyToLog to true.',
+    '',
+    `Current user role: ${user?.role || 'staff'}`,
+    `Current user name: ${user?.fullName || user?.email || 'Unknown user'}`,
+    `Current user department: ${user?.departmentId || 'Not assigned'}`,
+    '',
+    'Available active projects for this user:',
+    projectListForPrompt(projects),
+    '',
+    'Return valid JSON only with this exact shape:',
+    '{',
+    '  "reply": "string",',
+    '  "ticketDraft": {',
+    '    "title": "string or empty",',
+    '    "description": "string or empty",',
+    '    "timeframeLabel": "string or empty",',
+    '    "dueDate": "YYYY-MM-DD or null",',
+    '    "priority": "low|medium|high|urgent",',
+    '    "estimatedHours": "number or null",',
+    '    "projectId": "string or empty",',
+    '    "projectName": "string or empty",',
+    '    "readyToLog": true',
+    '  },',
+    '  "followUpQuestions": ["string", "string"]',
+    '}',
+  ].join('\n');
+}
+
+async function callAzureJsonChat({ systemPrompt, userContent, temperature = 0.2, maxTokens = 1200 }) {
+  if (!isAiConfigured()) {
+    throw new Error('AI assistant is not configured on the server');
+  }
+
+  const endpoint = env.azureOpenAiEndpoint.replace(/\/$/, '');
+  const response = await fetch(
+    `${endpoint}/openai/deployments/${encodeURIComponent(env.azureOpenAiModel)}/chat/completions?api-version=${encodeURIComponent(env.azureOpenAiApiVersion)}`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'api-key': env.azureOpenAiApiKey,
+      },
+      body: JSON.stringify({
+        temperature,
+        max_completion_tokens: maxTokens,
+        response_format: { type: 'json_object' },
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userContent },
+        ],
+      }),
+    },
+  );
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const message = data?.error?.message || data?.message || 'Azure OpenAI request failed';
+    throw new Error(message);
+  }
+
+  const content = data?.choices?.[0]?.message?.content;
+  if (!content) {
+    throw new Error('No AI response content received');
+  }
+
+  return parseJsonResponse(content);
 }
 
 export function isAiConfigured() {
@@ -251,6 +345,33 @@ export async function parseUsersFromImportDocument({
   return {
     users,
     summary: normalizeText(parsed.summary) || `Found ${users.length} user${users.length === 1 ? '' : 's'}.`,
+  };
+}
+
+export async function generateVoiceTicketDraft({ user, transcript, projects = [] }) {
+  const voiceNote = normalizeText(transcript).slice(0, 4000);
+  if (!voiceNote) {
+    throw new Error('Voice note is empty');
+  }
+
+  const parsed = await callAzureJsonChat({
+    systemPrompt: buildVoiceTicketSystemPrompt(user, projects),
+    userContent: [
+      'Transform this voice note into a professional calendar ticket with a proper title and description.',
+      '',
+      'Voice note:',
+      voiceNote,
+    ].join('\n'),
+    temperature: 0.2,
+    maxTokens: 1200,
+  });
+
+  return {
+    reply: normalizeText(parsed.reply) || 'Your calendar ticket draft is ready.',
+    followUpQuestions: Array.isArray(parsed.followUpQuestions)
+      ? parsed.followUpQuestions.map((question) => normalizeText(question)).filter(Boolean)
+      : [],
+    ticketDraft: normalizeTicketDraft(parsed.ticketDraft, projects, { requireTimeframe: false }),
   };
 }
 

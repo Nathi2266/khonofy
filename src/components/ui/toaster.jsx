@@ -6,28 +6,33 @@ import {
   ToastProvider,
   ToastTitle,
   ToastViewport,
+  ToastViewportCenter,
 } from "@/components/ui/toast";
 
 export function Toaster() {
   const { toasts } = useToast();
+  const centeredToasts = toasts.filter((toastItem) => toastItem.centered);
+  const defaultToasts = toasts.filter((toastItem) => !toastItem.centered);
+
+  const renderToast = ({ id, title, description, action, centered, onOpenChange, ...props }) => (
+    <Toast key={id} centered={centered} onOpenChange={onOpenChange} {...props}>
+      <div className="grid gap-1">
+        {title && <ToastTitle>{title}</ToastTitle>}
+        {description && <ToastDescription>{description}</ToastDescription>}
+      </div>
+      {action}
+      <ToastClose onClick={() => onOpenChange?.(false)} />
+    </Toast>
+  );
 
   return (
     <ToastProvider>
-      {toasts.map(function ({ id, title, description, action, ...props }) {
-        return (
-          <Toast key={id} {...props}>
-            <div className="grid gap-1">
-              {title && <ToastTitle>{title}</ToastTitle>}
-              {description && (
-                <ToastDescription>{description}</ToastDescription>
-              )}
-            </div>
-            {action}
-            <ToastClose />
-          </Toast>
-        );
-      })}
-      <ToastViewport />
+      <ToastViewport>
+        {defaultToasts.map(renderToast)}
+      </ToastViewport>
+      <ToastViewportCenter>
+        {centeredToasts.map(renderToast)}
+      </ToastViewportCenter>
     </ToastProvider>
   );
-} 
+}

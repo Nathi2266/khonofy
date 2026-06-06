@@ -1,5 +1,6 @@
 import { Link, useLocation, Outlet } from 'react-router-dom';
 import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { base44 } from '@/api/base44Client';
 import { cn } from '@/lib/utils';
@@ -77,6 +78,22 @@ export default function Layout() {
   const role = user?.role || 'staff';
   const navItems = getNavItems(role);
   const [showLogoutDialog, setShowLogoutDialog] = useState(false);
+  const isAdmin = role === 'admin';
+  const onTimesheetReview = location.pathname === '/timesheets/review';
+
+  const { data: timesheetReviewCount = 0 } = useQuery({
+    queryKey: ['sidebarTimesheetReviewCount', user?.id],
+    queryFn: async () => {
+      const [pending, revokes] = await Promise.all([
+        base44.entities.Timesheet.filter({ status: 'pending' }),
+        base44.entities.Timesheet.filter({ status: 'revoke_pending' }),
+      ]);
+      return pending.length + revokes.length;
+    },
+    enabled: isAdmin && !!user?.id,
+  });
+
+  const showTimesheetReviewBadge = isAdmin && !onTimesheetReview && timesheetReviewCount > 0;
 
   return (
     <div className="flex h-app bg-background overflow-hidden">
@@ -94,7 +111,12 @@ export default function Layout() {
             return (
               <Link key={item.path} to={item.path} className={navLinkClass(active)}>
                 <SidebarNavIcon item={item} />
-                <span className="text-sm font-bold">{item.label}</span>
+                <span className="flex-1 text-sm font-bold">{item.label}</span>
+                {item.path === '/timesheets/review' && showTimesheetReviewBadge ? (
+                  <span className="rounded-full bg-red-500 px-2 py-0.5 text-xs font-bold text-white">
+                    {timesheetReviewCount}
+                  </span>
+                ) : null}
               </Link>
             );
           })}
@@ -138,10 +160,10 @@ export default function Layout() {
 
       {showLogoutDialog ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
-          <div className="w-full max-w-md rounded-xl border border-sidebar-border bg-sidebar p-6 text-sidebar-foreground shadow-xl">
+          <div className="w-full max-w-sm rounded-xl border border-sidebar-border bg-sidebar p-4 text-sidebar-foreground shadow-xl">
             <h2 className="text-center text-lg font-semibold">Log out?</h2>
             <p className="mt-2 text-center text-sm text-sidebar-foreground/70">
-              Are you sure you want to log out of Khonofy?
+              Are you sure you want to log out of Khonology - Khonofy?
             </p>
             <div className="mt-6 flex items-center justify-between gap-1.5">
               <button

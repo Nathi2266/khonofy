@@ -60,7 +60,7 @@ export default function Register() {
       <AuthLayout
         icon={null}
         topImage={khonoImage}
-        topImageAlt="Khonofy"
+        topImageAlt="Khonology - Khonofy"
         topImageClassName="w-72 sm:w-80"
         title="Create account"
         subtitle="Sign up to get started"

@@ -183,3 +183,21 @@ aside nav a:not([class*='bg-primary']):hover svg {
 .dark .bg-popover {
   background-color: rgba(55, 55, 55, 0.97) !important;
 }
+
+@keyframes voice-spectrum-bar {
+  0%,
+  100% {
+    height: 4px;
+    opacity: 0.45;
+  }
+  50% {
+    height: var(--spectrum-max-height, 24px);
+    opacity: 1;
+  }
+}
+
+.voice-spectrum-bar {
+  animation-name: voice-spectrum-bar;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+}

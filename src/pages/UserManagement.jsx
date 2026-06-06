@@ -82,6 +82,7 @@ const EMPTY_BULK_EDIT = {
   role: BULK_NO_CHANGE,
   department_id: BULK_NO_CHANGE,
   designation_id: BULK_NO_CHANGE,
+  admin_id: BULK_NO_CHANGE,
 };
 
 const EMPTY_FORM = {
@@ -605,11 +606,19 @@ export default function UserManagement() {
   });
 
   const bulkUpdateUsers = useMutation({
-    /** @param {{ userIds: string[], updates: Record<string, string | null> }} variables */
+    /** @param {{ userIds: string[], updates: Record<string, string | null>, adminId?: string | null | undefined }} variables */
     mutationFn: async (variables) => {
-      const { userIds, updates } = variables;
+      const { userIds, updates, adminId } = variables;
       for (const userId of userIds) {
-        await base44.entities.User.update(userId, updates);
+        /** @type {Record<string, string | null>} */
+        const payload = { ...updates };
+        const targetUser = users.find((item) => item.id === userId);
+        if (adminId !== undefined) {
+          if (targetUser?.role === 'staff') {
+            payload.admin_id = adminId;
+          }
+        }
+        await base44.entities.User.update(userId, payload);
       }
       return userIds.length;
     },
@@ -912,18 +921,32 @@ export default function UserManagement() {
   const handleBulkEditSubmit = () => {
     /** @type {Record<string, string | null>} */
     const updates = {};
+    /** @type {string | null | undefined} */
+    let adminId = undefined;
+
     if (bulkEditForm.role !== BULK_NO_CHANGE) updates.role = bulkEditForm.role;
     if (bulkEditForm.department_id !== BULK_NO_CHANGE) {
-      updates.departmentId = bulkEditForm.department_id === 'none' ? null : bulkEditForm.department_id;
+      updates.department_id = bulkEditForm.department_id === 'none' ? null : bulkEditForm.department_id;
     }
     if (bulkEditForm.designation_id !== BULK_NO_CHANGE) {
-      updates.designationId = bulkEditForm.designation_id === 'none' ? null : bulkEditForm.designation_id;
+      updates.designation_id = bulkEditForm.designation_id === 'none' ? null : bulkEditForm.designation_id;
     }
-    if (!Object.keys(updates).length) {
+    if (bulkEditForm.admin_id !== BULK_NO_CHANGE) {
+      adminId = bulkEditForm.admin_id === 'none' ? null : bulkEditForm.admin_id;
+    }
+
+    if (!Object.keys(updates).length && adminId === undefined) {
       toast.error('Choose at least one field to update.');
       return;
     }
-    bulkUpdateUsers.mutate({ userIds: selectedUserIds, updates });
+
+    const staffSelectedCount = selectedUsers.filter((item) => item.role === 'staff').length;
+    if (adminId !== undefined && staffSelectedCount === 0) {
+      toast.error('Admin assignment only applies to staff users. Select at least one staff member.');
+      return;
+    }
+
+    bulkUpdateUsers.mutate({ userIds: selectedUserIds, updates, adminId });
   };
 
   const handleBulkDelete = () => {
@@ -1371,15 +1394,15 @@ export default function UserManagement() {
       </div>
 
       <Dialog open={showImport} onOpenChange={(open) => (open ? setShowImport(true) : closeImport())}>
-        <DialogContent className="max-w-3xl max-h-[90dvh] flex flex-col gap-0 overflow-hidden p-0">
-          <DialogHeader className="flex-shrink-0 px-6 pt-6 pb-3">
+        <DialogContent className="max-w-xl max-h-[80dvh] flex flex-col gap-0 overflow-hidden p-0">
+          <DialogHeader className="flex-shrink-0 px-4 pt-4 pb-3">
             <DialogTitle>Import Users</DialogTitle>
             <DialogDescription>
               Upload or drag and drop a {IMPORT_FILE_LABEL} file, then use Scan with AI for the most accurate results before creating users.
             </DialogDescription>
           </DialogHeader>
 
-          <div className="flex-1 min-h-0 overflow-y-auto px-6 space-y-4 pb-4">
+          <div className="flex-1 min-h-0 overflow-y-auto px-4 space-y-4 pb-4">
             {importFileName && !aiScanComplete && !isAiScanning ? (
               <div className="rounded-lg border border-primary/30 bg-primary/5 px-4 py-3 flex items-start gap-3">
                 <Sparkles className="w-5 h-5 text-primary flex-shrink-0 mt-0.5" />
@@ -1542,7 +1565,7 @@ export default function UserManagement() {
             ) : null}
           </div>
 
-          <DialogFooter className="flex-shrink-0 px-6 py-4 border-t border-border bg-card">
+          <DialogFooter className="flex-shrink-0 px-4 py-4 border-t border-border bg-card">
             <Button variant="outline" onClick={closeImport}>
               Cancel
             </Button>
@@ -1576,7 +1599,7 @@ export default function UserManagement() {
       ) : null}
 
       <Dialog open={showBulkEdit} onOpenChange={(open) => (open ? setShowBulkEdit(true) : closeBulkEditDialog())}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Edit Selected Users</DialogTitle>
             <DialogDescription>
@@ -1622,7 +1645,7 @@ export default function UserManagement() {
               </Select>
             </div>
             <div>
-              <label className="text-sm font-medium text-foreground mb-1.5 block">Designation</label>
+              <label className="mb-1.5 block text-sm font-medium text-foreground">Designation</label>
               <Select
                 value={bulkEditForm.designation_id}
                 onValueChange={(value) => setBulkEditForm((current) => ({ ...current, designation_id: value }))}
@@ -1641,6 +1664,29 @@ export default function UserManagement() {
                 </SelectContent>
               </Select>
             </div>
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-foreground">Assigned Admin</label>
+              <Select
+                value={bulkEditForm.admin_id}
+                onValueChange={(value) => setBulkEditForm((current) => ({ ...current, admin_id: value }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="No change" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={BULK_NO_CHANGE}>No change</SelectItem>
+                  <SelectItem value="none">Unassigned</SelectItem>
+                  {adminUsers.map((admin) => (
+                    <SelectItem key={admin.id} value={admin.id}>
+                      {userLabel(admin)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="mt-1.5 text-xs text-muted-foreground">
+                Applies to selected staff users only. Admins and super users are skipped.
+              </p>
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={closeBulkEditDialog}>Cancel</Button>
@@ -1652,7 +1698,7 @@ export default function UserManagement() {
       </Dialog>
 
       <Dialog open={showBulkDelete} onOpenChange={setShowBulkDelete}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Delete Selected Users</DialogTitle>
             <DialogDescription>
@@ -1684,14 +1730,14 @@ export default function UserManagement() {
       </Dialog>
 
       <Dialog open={showForm} onOpenChange={(open) => (open ? setShowForm(true) : closeForm())}>
-        <DialogContent className="max-w-md max-h-[90dvh] flex flex-col gap-0 overflow-hidden p-0">
-          <DialogHeader className="flex-shrink-0 px-6 pt-6 pb-3">
+        <DialogContent className="max-w-sm max-h-[80dvh] flex flex-col gap-0 overflow-hidden p-0">
+          <DialogHeader className="flex-shrink-0 px-4 pt-4 pb-3">
             <DialogTitle>Create New User</DialogTitle>
             <DialogDescription>
               Add a new super user, admin, or staff user to the system.
             </DialogDescription>
           </DialogHeader>
-          <div className="flex-1 min-h-0 overflow-y-auto px-6 space-y-3">
+          <div className="flex-1 min-h-0 overflow-y-auto px-4 space-y-3">
             <div>
               <label className="text-sm font-medium text-foreground mb-1.5 block">Full Name</label>
               <Input
@@ -1797,7 +1843,7 @@ export default function UserManagement() {
               </div>
             )}
           </div>
-          <DialogFooter className="flex-shrink-0 px-6 py-4 border-t border-border bg-card">
+          <DialogFooter className="flex-shrink-0 px-4 py-4 border-t border-border bg-card">
             <Button variant="outline" onClick={closeForm}>Cancel</Button>
             <Button onClick={handleSubmit} disabled={!form.email.trim() || !form.password.trim() || createUser.isPending}>
               {createUser.isPending ? 'Saving...' : 'Create User'}
@@ -1807,7 +1853,7 @@ export default function UserManagement() {
       </Dialog>
 
       <Dialog open={!!assignTarget} onOpenChange={(open) => { if (!open) closeAssignDialog(); }}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle>
               Assign Admin to {userLabel(assignTarget)}

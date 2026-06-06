@@ -54,7 +54,7 @@ export default function AdminReports() {
     const approved = deptSheets.filter(t => t.status === 'approved').reduce((s, t) => s + (t.total_hours || 0), 0);
     const pending = deptSheets.filter(t => t.status === 'pending').reduce((s, t) => s + (t.total_hours || 0), 0);
     const staff = allUsers.filter(u => u.department_id === dept.id && u.role === 'staff').length;
-    return { name: dept.name.length > 12 ? dept.name.slice(0, 12) + '…' : dept.name, approved: Math.round(approved), pending: Math.round(pending), staff };
+    return { name: dept.name, approved: Math.round(approved), pending: Math.round(pending), staff };
   });
 
   const totalApproved = allTimesheets.filter(t => t.status === 'approved').reduce((s, t) => s + (t.total_hours || 0), 0);
@@ -122,10 +122,17 @@ export default function AdminReports() {
         <div className="bg-card rounded-xl border border-border p-5">
           <h2 className="font-semibold text-foreground mb-4">Hours by Department</h2>
           {deptHoursData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={260}>
-              <BarChart data={deptHoursData}>
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart data={deptHoursData} margin={{ bottom: 20 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                <XAxis dataKey="name" tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} />
+                <XAxis
+                  dataKey="name"
+                  tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
+                  interval={0}
+                  angle={-25}
+                  textAnchor="end"
+                  height={70}
+                />
                 <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} />
                 <Tooltip contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '8px', fontSize: '13px' }} />
                 <Legend iconType="circle" iconSize={8} />
@@ -165,7 +172,7 @@ export default function AdminReports() {
         <div className="divide-y divide-border">
           {deptHoursData.map((dept, i) => (
             <div key={i} className="grid grid-cols-4 gap-4 px-4 py-3.5 items-center hover:bg-muted/20 transition-colors">
-              <span className="font-medium text-foreground text-sm">{dept.name}</span>
+              <span className="text-sm font-medium text-foreground break-words">{dept.name}</span>
               <div className="text-center">
                 <p className="font-semibold text-foreground">{dept.approved}h</p>
                 <p className="text-xs text-muted-foreground">Approved</p>

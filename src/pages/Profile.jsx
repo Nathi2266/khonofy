@@ -611,7 +611,7 @@ export default function Profile() {
       </div>
 
       <Dialog open={cropDialogOpen} onOpenChange={(open) => (!open ? resetCropDialog() : setCropDialogOpen(true))}>
-        <DialogContent className="max-w-3xl">
+        <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>Crop profile photo</DialogTitle>
             <DialogDescription>

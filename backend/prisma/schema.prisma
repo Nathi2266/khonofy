@@ -33,6 +33,7 @@ enum TimesheetStatus {
   pending
   approved
   rejected
+  revoke_pending
 }
 
 model User {
@@ -58,12 +59,13 @@ model User {
 }
 
 model Department {
-  id          String   @id @default(cuid())
-  name        String
-  description String?
-  adminId     String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id                String   @id @default(cuid())
+  name              String
+  description       String?
+  adminId           String?
+  weeklyHourTarget  Float?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 }
 
 model Designation {
@@ -155,6 +157,10 @@ model Timesheet {
   submittedAt     DateTime?
   reviewedBy      String?
   reviewedByName  String?
+  reviewedAt      DateTime?
+  withdrawnAt     DateTime?
+  revokedAt       DateTime?
+  revokeRequestedAt DateTime?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 }

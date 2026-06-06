@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import StatsCard from '@/components/StatsCard';
 import { Link } from 'react-router-dom';
-import { Users, CheckSquare, Clock, TrendingUp, ArrowRight, AlertCircle, Info } from 'lucide-react';
+import { Users, CheckSquare, Clock, TrendingUp, ArrowRight, AlertCircle, Info, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import PageHeader from '@/components/PageHeader';
 import PageShell from '@/components/PageShell';
@@ -19,6 +19,12 @@ export default function AdminDashboard({ user }) {
   const { data: pendingTimesheets = [] } = useQuery({
     queryKey: ['pendingTimesheets', user.id],
     queryFn: () => base44.entities.Timesheet.filter({ status: 'pending' }),
+    enabled: !!user,
+  });
+
+  const { data: revokePendingTimesheets = [] } = useQuery({
+    queryKey: ['revokePendingTimesheets', user.id],
+    queryFn: () => base44.entities.Timesheet.filter({ status: 'revoke_pending' }),
     enabled: !!user,
   });
 
@@ -65,10 +71,11 @@ export default function AdminDashboard({ user }) {
         </div>
       )}
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         <StatsCard label="Team Members" value={assignedStaff.length} icon={Users} color="primary" />
         <StatsCard label="Open Tasks" value={openTasks} icon={CheckSquare} color="amber" />
         <StatsCard label="Pending Approvals" value={pendingTimesheets.length} icon={Clock} color="red" sub="timesheets awaiting" />
+        <StatsCard label="Revoke Requests" value={revokePendingTimesheets.length} icon={RotateCcw} color="amber" sub="need your decision" />
         <StatsCard
           label="Completion Rate"
           value={totalTasks ? `${Math.round((completedTasks / totalTasks) * 100)}%` : '0%'}
@@ -76,6 +83,23 @@ export default function AdminDashboard({ user }) {
           color="green"
         />
       </div>
+
+      {revokePendingTimesheets.length > 0 && (
+        <div className="flex items-center justify-between rounded-xl border border-purple-200 bg-purple-50 p-4">
+          <div className="flex items-center gap-3">
+            <RotateCcw className="h-5 w-5 text-purple-600" />
+            <div>
+              <p className="text-sm font-semibold text-purple-900">
+                {revokePendingTimesheets.length} revoke request{revokePendingTimesheets.length > 1 ? 's' : ''} from your team
+              </p>
+              <p className="text-xs text-purple-700">Staff have asked to unlock approved timesheets. Approve or decline each request.</p>
+            </div>
+          </div>
+          <Link to="/timesheets/review?tab=revoke_pending">
+            <Button size="sm" className="bg-purple-600 text-white hover:bg-purple-700">Review Revokes</Button>
+          </Link>
+        </div>
+      )}
 
       {pendingTimesheets.length > 0 && (
         <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-center justify-between">
@@ -125,20 +149,24 @@ export default function AdminDashboard({ user }) {
             </Link>
           </div>
           <div className="space-y-2">
-            {pendingTimesheets.slice(0, 6).map(ts => (
-              <div key={ts.id} className="flex items-center justify-between py-2 px-3 rounded-lg bg-muted/50">
+            {[...revokePendingTimesheets, ...pendingTimesheets].slice(0, 6).map((ts) => (
+              <div key={ts.id} className="flex items-center justify-between rounded-lg bg-muted/50 px-3 py-2">
                 <div>
                   <p className="text-sm font-medium text-foreground">{ts.user_name || 'Team Member'}</p>
                   <p className="text-xs text-muted-foreground">
                     Week of {new Date(ts.week_start).toLocaleDateString()} · {ts.total_hours || 0}h
                   </p>
                 </div>
-                <span className="text-xs font-medium px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-700">
-                  pending
+                <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                  ts.status === 'revoke_pending'
+                    ? 'bg-purple-100 text-purple-700'
+                    : 'bg-amber-100 text-amber-700'
+                }`}>
+                  {ts.status === 'revoke_pending' ? 'revoke request' : 'pending'}
                 </span>
               </div>
             ))}
-            {pendingTimesheets.length === 0 && (
+            {pendingTimesheets.length === 0 && revokePendingTimesheets.length === 0 && (
               <p className="text-center text-muted-foreground text-sm py-6">
                 All caught up! No pending approvals. ✅
               </p>

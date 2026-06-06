@@ -11,11 +11,12 @@ export default function CalendarDayColumn({
   onPointerDownResize,
   onOpenEntry,
   currentTimeTop,
+  readOnly = false,
 }) {
   const today = isTodayInView(date);
 
   return (
-    <div className="min-w-[180px] flex-1 border-l border-border bg-background">
+    <div className={`min-w-[180px] flex-1 border-l border-border ${readOnly ? 'bg-muted/30' : 'bg-background'}`}>
       <div className={`h-14 border-b border-border px-3 py-2 text-center ${today ? 'bg-primary/5' : 'bg-card'}`}>
         <p className="text-xs font-medium text-muted-foreground">{format(date, 'EEE')}</p>
         <p className={`text-lg font-semibold ${today ? 'text-primary' : 'text-foreground'}`}>{format(date, 'd')}</p>
@@ -24,9 +25,9 @@ export default function CalendarDayColumn({
       <div
         data-day-column="true"
         data-date={format(date, 'yyyy-MM-dd')}
-        className="relative select-none"
+        className={`relative select-none ${readOnly ? 'cursor-not-allowed' : ''}`}
         style={{ height: MINUTES_IN_DAY * PX_PER_MINUTE }}
-        onPointerDown={(event) => onPointerDownCreate(event, date)}
+        onPointerDown={readOnly ? undefined : (event) => onPointerDownCreate(event, date)}
       >
         {Array.from({ length: 24 }, (_, hour) => (
           <div
@@ -59,6 +60,7 @@ export default function CalendarDayColumn({
           <CalendarEntryBlock
             key={entry.id}
             entry={entry}
+            readOnly={readOnly}
             onPointerDownMove={onPointerDownMove}
             onPointerDownResize={onPointerDownResize}
             onOpen={onOpenEntry}
