@@ -57,7 +57,6 @@ export default function TeamManagement() {
       <PageHeader
         title="Team Management"
         description="Overview of your team members, tasks, and timesheet statuses."
-        iconSrc={dashboardIcon1}
       />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">

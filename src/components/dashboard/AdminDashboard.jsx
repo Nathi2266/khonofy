@@ -68,7 +68,6 @@ export default function AdminDashboard({ user }) {
       <PageHeader
         title="Team Dashboard"
         description="Overview of your team's progress and pending actions."
-        iconSrc={dashboardIcon1}
       />
 
       {assignedStaff.length === 0 && (

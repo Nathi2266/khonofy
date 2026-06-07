@@ -378,7 +378,6 @@ export default function Profile() {
       <PageHeader
         title="My Profile"
         description="Manage your account information, preferences, and profile photo."
-        iconSrc={user?.role === 'admin' ? dashboardIcon1 : undefined}
       />
 
       <div className="grid grid-cols-1 xl:grid-cols-[340px_1fr] gap-6 items-start">

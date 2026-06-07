@@ -240,7 +240,6 @@ export default function TaskManagement() {
       <PageHeader
         title="Task Management"
         description="Create, assign, and track tasks for your team."
-        iconSrc={dashboardIcon4}
         actions={
           <Button onClick={openCreate} className="gap-2">
             <Plus className="w-4 h-4" /> New Task

@@ -329,7 +329,6 @@ export default function TagManagement() {
       <PageHeader
         title="Tag Management"
         description="Create tags, departments, and designations used across the app."
-        iconSrc={dashboardIcon4}
       />
 
       <div className="w-full space-y-6">

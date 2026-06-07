@@ -202,7 +202,6 @@ export default function TimesheetReview() {
       <PageHeader
         title="Timesheet Review"
         description="Open a submitted staff timesheet, review every task and hour, then approve or reject it with feedback."
-        iconSrc={dashboardIcon10}
       />
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-4">

@@ -647,7 +647,6 @@ export default function ProjectManagement() {
       <PageHeader
         title="Project Management"
         description="Manage clients and projects that power the Clockify-style calendar."
-        iconSrc={dashboardIcon2}
       />
 
       <div className="space-y-6">

@@ -145,7 +145,6 @@ export default function DeptHeadSummary() {
       <PageHeader
         title="Hours vs Estimates"
         description="Department submitted hours, logged hours, and weekly time lock for your allocated staff."
-        iconSrc={dashboardIcon5}
       />
 
       {isAdmin && adminDepartment ? (
