@@ -1,7 +1,9 @@
 import { Link, useLocation, Outlet } from 'react-router-dom';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
+import { GLOBAL_LOADING_MIN_MS, useGlobalLoadingVisible } from '@/hooks/useGlobalLoading';
+import { useLoading } from '@/lib/LoadingContext';
 import { base44 } from '@/api/base44Client';
 import { cn } from '@/lib/utils';
 import khonoImage from '@/assets/images/khono.png';
@@ -53,22 +55,20 @@ function getNavItems(role) {
   return STAFF_NAV;
 }
 
-function SidebarNavIcon({ iconSrc, shouldSpin = false, spinKey, onSpinEnd, className = '' }) {
+function SidebarNavIcon({ iconSrc, shouldPulse = false, className = '' }) {
   return (
     <img
-      key={spinKey}
       src={iconSrc}
       alt=""
       aria-hidden="true"
       className={cn(
         SIDEBAR_ICON_CLASS,
-        'transition-transform duration-200 ease-out group-hover:scale-110 group-hover:-rotate-3',
-        shouldSpin && 'animate-sidebar-icon-spin-once',
+        'transition-transform duration-200 ease-out',
+        shouldPulse
+          ? 'animate-sidebar-icon-heartbeat'
+          : 'group-hover:scale-110 group-hover:-rotate-3',
         className,
       )}
-      onAnimationEnd={() => {
-        if (shouldSpin) onSpinEnd?.();
-      }}
     />
   );
 }
@@ -88,7 +88,10 @@ export default function Layout() {
   const role = user?.role || 'staff';
   const navItems = getNavItems(role);
   const [showLogoutDialog, setShowLogoutDialog] = useState(false);
-  const [iconSpin, setIconSpin] = useState({ path: '', token: 0 });
+  const [spinningPath, setSpinningPath] = useState('');
+  const globalLoadingVisible = useGlobalLoadingVisible();
+  const { showLoading, hideLoading } = useLoading();
+  const navLoadTimerRef = useRef(null);
   const isAdmin = role === 'admin';
   const onTimesheetReview = location.pathname === '/timesheets/review';
 
@@ -106,13 +109,31 @@ export default function Layout() {
 
   const showTimesheetReviewBadge = isAdmin && !onTimesheetReview && timesheetReviewCount > 0;
 
-  const triggerIconSpin = (path) => {
-    setIconSpin({ path, token: Date.now() });
+  const triggerNavLoad = (path) => {
+    setSpinningPath(path);
+    showLoading();
+    if (navLoadTimerRef.current) {
+      clearTimeout(navLoadTimerRef.current);
+    }
+    navLoadTimerRef.current = window.setTimeout(() => {
+      hideLoading();
+      navLoadTimerRef.current = null;
+    }, GLOBAL_LOADING_MIN_MS);
   };
 
-  const clearIconSpin = () => {
-    setIconSpin({ path: '', token: 0 });
-  };
+  useEffect(() => {
+    if (!globalLoadingVisible) {
+      setSpinningPath('');
+    }
+  }, [globalLoadingVisible]);
+
+  useEffect(() => () => {
+    if (navLoadTimerRef.current) {
+      clearTimeout(navLoadTimerRef.current);
+    }
+  }, []);
+
+  const isIconPulsing = (path) => globalLoadingVisible && spinningPath === path;
 
   return (
     <div className="flex h-app bg-background overflow-hidden">
@@ -132,13 +153,11 @@ export default function Layout() {
                 key={item.path}
                 to={item.path}
                 className={navLinkClass(active)}
-                onClick={() => triggerIconSpin(item.path)}
+                onClick={() => triggerNavLoad(item.path)}
               >
                 <SidebarNavIcon
                   iconSrc={item.iconSrc}
-                  shouldSpin={iconSpin.path === item.path}
-                  spinKey={iconSpin.path === item.path ? iconSpin.token : item.path}
-                  onSpinEnd={clearIconSpin}
+                  shouldPulse={isIconPulsing(item.path)}
                 />
                 <span className="flex-1 text-sm font-bold">{item.label}</span>
                 {item.path === '/timesheets/review' && showTimesheetReviewBadge ? (
@@ -155,13 +174,11 @@ export default function Layout() {
           <Link
             to="/profile"
             className={navLinkClass(location.pathname === '/profile')}
-            onClick={() => triggerIconSpin('/profile')}
+            onClick={() => triggerNavLoad('/profile')}
           >
             <SidebarNavIcon
               iconSrc={sidebarIcon8}
-              shouldSpin={iconSpin.path === '/profile'}
-              spinKey={iconSpin.path === '/profile' ? iconSpin.token : '/profile'}
-              onSpinEnd={clearIconSpin}
+              shouldPulse={isIconPulsing('/profile')}
             />
             <span className="text-sm font-bold">Profile</span>
           </Link>

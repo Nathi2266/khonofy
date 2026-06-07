@@ -1,11 +1,16 @@
 import DiscLoader from '@/components/DiscLoader';
 import { cn } from '@/lib/utils';
 
-export default function LoadingOverlay({ label = 'Loading', className = '' }) {
+export default function LoadingOverlay({
+  label = 'Loading',
+  className = '',
+  coverMainOnly = false,
+}) {
   return (
     <div
       className={cn(
-        'fixed inset-0 z-[100] flex items-center justify-center bg-background/70 backdrop-blur-[2px]',
+        'fixed z-[100] flex items-center justify-center bg-background/70 backdrop-blur-[2px]',
+        coverMainOnly ? 'left-64 top-0 right-0 bottom-0' : 'inset-0',
         className
       )}
       role="presentation"

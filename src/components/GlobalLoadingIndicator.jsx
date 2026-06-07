@@ -1,21 +1,17 @@
-import { useEffect, useState } from 'react';
-import { useIsMutating } from '@tanstack/react-query';
+import { useLocation } from 'react-router-dom';
 import LoadingOverlay from '@/components/LoadingOverlay';
-import { subscribeLoading } from '@/lib/loading-bus';
-import { useLoading } from '@/lib/LoadingContext';
+import { useGlobalLoadingVisible } from '@/hooks/useGlobalLoading';
+
+const AUTH_PATHS = new Set(['/login', '/register', '/forgot-password', '/reset-password']);
 
 export default function GlobalLoadingIndicator() {
-  const mutatingCount = useIsMutating();
-  const { loadingCount } = useLoading();
-  const [pendingRequests, setPendingRequests] = useState(0);
+  const location = useLocation();
+  const visible = useGlobalLoadingVisible();
+  const coverMainOnly = !AUTH_PATHS.has(location.pathname);
 
-  useEffect(() => subscribeLoading(setPendingRequests), []);
-
-  const isActive = pendingRequests > 0 || mutatingCount > 0 || loadingCount > 0;
-
-  if (!isActive) {
+  if (!visible) {
     return null;
   }
 
-  return <LoadingOverlay />;
+  return <LoadingOverlay coverMainOnly={coverMainOnly} />;
 }

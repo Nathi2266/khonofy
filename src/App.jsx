@@ -69,8 +69,8 @@ function App() {
               <Route path="*" element={<PageNotFound />} />
             </Routes>
             <GlobalFloatingActions />
+            <GlobalLoadingIndicator />
           </Router>
-          <GlobalLoadingIndicator />
           <Toaster />
           <SonnerToaster richColors closeButton position="top-right" />
           </LoadingProvider>
