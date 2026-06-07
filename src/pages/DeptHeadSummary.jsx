@@ -3,7 +3,13 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, CartesianGrid } from 'recharts';
-import { Users, Clock, Target, TrendingUp, AlertCircle, Lock } from 'lucide-react';
+import StatsCard from '@/components/StatsCard';
+import DashboardIcon, { DASHBOARD_ICON_SIZES } from '@/components/DashboardIcon';
+import dashboardIcon1 from '@/assets/images/dashboard/1.png';
+import dashboardIcon3 from '@/assets/images/dashboard/3.png';
+import dashboardIcon5 from '@/assets/images/dashboard/5.png';
+import dashboardIcon18 from '@/assets/images/dashboard/18.png';
+import dashboardIcon20 from '@/assets/images/dashboard/20.png';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import PageHeader from '@/components/PageHeader';
@@ -139,6 +145,7 @@ export default function DeptHeadSummary() {
       <PageHeader
         title="Hours vs Estimates"
         description="Department submitted hours, logged hours, and weekly time lock for your allocated staff."
+        iconSrc={dashboardIcon5}
       />
 
       {isAdmin && adminDepartment ? (
@@ -146,7 +153,7 @@ export default function DeptHeadSummary() {
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
               <h2 className="flex items-center gap-2 font-semibold text-foreground">
-                <Lock className="h-4 w-4 text-primary" />
+                <DashboardIcon src={dashboardIcon18} className={DASHBOARD_ICON_SIZES.section} />
                 Weekly Time Lock
               </h2>
               <p className="mt-1 text-sm text-muted-foreground">
@@ -180,26 +187,16 @@ export default function DeptHeadSummary() {
       ) : null}
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        {[
-          { label: 'Team Members', value: members.length, icon: Users, color: 'text-blue-500' },
-          { label: 'Total Logged', value: `${totalLogged.toFixed(1)}h`, icon: Clock, color: 'text-emerald-500' },
-          { label: 'Total Submitted', value: `${totalSubmitted.toFixed(1)}h`, icon: Target, color: 'text-primary' },
-          { label: 'Over Budget', value: overBudgetCount, icon: AlertCircle, color: 'text-amber-500' },
-        ].map((card) => (
-          <div key={card.label} className="flex items-center gap-3 rounded-xl border border-border bg-card p-4">
-            <card.icon className={`h-8 w-8 flex-shrink-0 ${card.color}`} />
-            <div>
-              <p className="text-xs text-muted-foreground">{card.label}</p>
-              <p className="text-xl font-bold text-foreground">{card.value}</p>
-            </div>
-          </div>
-        ))}
+        <StatsCard label="Team Members" value={members.length} iconSrc={dashboardIcon1} color="blue" />
+        <StatsCard label="Total Logged" value={`${totalLogged.toFixed(1)}h`} iconSrc={dashboardIcon5} color="green" />
+        <StatsCard label="Total Submitted" value={`${totalSubmitted.toFixed(1)}h`} iconSrc={dashboardIcon20} color="primary" />
+        <StatsCard label="Over Budget" value={overBudgetCount} iconSrc={dashboardIcon3} color="amber" />
       </div>
 
       {memberStats.length > 0 ? (
         <div className="rounded-xl border border-border bg-card p-5">
           <h2 className="mb-4 flex items-center gap-2 font-semibold text-foreground">
-            <TrendingUp className="h-4 w-4 text-primary" />
+            <DashboardIcon src={dashboardIcon5} className={DASHBOARD_ICON_SIZES.section} />
             Logged, Submitted, and Estimated per Member
           </h2>
           <ResponsiveContainer width="100%" height={280}>
@@ -219,11 +216,17 @@ export default function DeptHeadSummary() {
 
       <div className="overflow-hidden rounded-xl border border-border bg-card">
         <div className="border-b border-border px-5 py-3">
-          <h2 className="font-semibold text-foreground">Member Breakdown</h2>
+          <h2 className="font-semibold text-foreground flex items-center gap-2">
+            <DashboardIcon src={dashboardIcon1} className={DASHBOARD_ICON_SIZES.section} />
+            Member Breakdown
+          </h2>
         </div>
         <div className="divide-y divide-border">
           {memberStats.length === 0 ? (
-            <p className="py-8 text-center text-sm text-muted-foreground">No data yet for your allocated staff.</p>
+            <div className="py-8 text-center">
+              <DashboardIcon src={dashboardIcon1} className={`mx-auto mb-3 opacity-40 ${DASHBOARD_ICON_SIZES.hero}`} />
+              <p className="text-sm text-muted-foreground">No data yet for your allocated staff.</p>
+            </div>
           ) : null}
           {memberStats.map((member) => {
             const pct = member.estimated > 0 ? Math.min((member.logged / member.estimated) * 100, 150) : null;

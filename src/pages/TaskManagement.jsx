@@ -7,6 +7,8 @@ import { Button } from '@/components/ui/button';
 import PageHeader from '@/components/PageHeader';
 import PageShell from '@/components/PageShell';
 import SectionLoader from '@/components/SectionLoader';
+import DashboardIcon, { DASHBOARD_ICON_SIZES } from '@/components/DashboardIcon';
+import dashboardIcon4 from '@/assets/images/dashboard/4.png';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
@@ -14,7 +16,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel,
   AlertDialogContent, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle
 } from '@/components/ui/alert-dialog';
-import { Plus, Search, Pencil, Trash2, CheckSquare } from 'lucide-react';
+import { Plus, Search, Pencil, Trash2 } from 'lucide-react';
 import { toast } from '@/components/ui/use-toast';
 
 const PRIORITIES = ['low', 'medium', 'high', 'urgent'];
@@ -238,6 +240,7 @@ export default function TaskManagement() {
       <PageHeader
         title="Task Management"
         description="Create, assign, and track tasks for your team."
+        iconSrc={dashboardIcon4}
         actions={
           <Button onClick={openCreate} className="gap-2">
             <Plus className="w-4 h-4" /> New Task
@@ -285,7 +288,7 @@ export default function TaskManagement() {
         {isLoading ? <SectionLoader label="Loading tasks..." /> : null}
         {!isLoading && filtered.length === 0 && (
           <div className="text-center py-12">
-            <CheckSquare className="w-10 h-10 text-muted-foreground/40 mx-auto mb-3" />
+            <DashboardIcon src={dashboardIcon4} className={`mx-auto mb-3 opacity-40 ${DASHBOARD_ICON_SIZES.hero}`} />
             <p className="font-medium text-foreground">No tasks found</p>
             <p className="text-muted-foreground text-sm">Create your first task to get started.</p>
           </div>

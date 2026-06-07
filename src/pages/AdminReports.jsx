@@ -9,6 +9,7 @@ import dashboardIcon3 from '@/assets/images/dashboard/3.png';
 import dashboardIcon4 from '@/assets/images/dashboard/4.png';
 import dashboardIcon5 from '@/assets/images/dashboard/5.png';
 import dashboardIcon20 from '@/assets/images/dashboard/20.png';
+import dashboardIcon11 from '@/assets/images/dashboard/11.png';
 import dashboardIcon19 from '@/assets/images/dashboard/19.png';
 import { CalendarDays } from 'lucide-react';
 import { Input } from '@/components/ui/input';
@@ -89,6 +90,7 @@ export default function AdminReports() {
       <PageHeader
         title="Department Reports"
         description="Hours tracked and productivity metrics across all departments."
+        iconSrc={dashboardIcon11}
       />
 
       {/* Date range filter */}

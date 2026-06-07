@@ -8,6 +8,7 @@ export const TIMESHEET_STATUS_ICONS = {
   pending: dashboardIcon18,
   approved: dashboardIcon20,
   rejected: dashboardIcon13,
+  revoke_pending: dashboardIcon18,
 };
 
 export const TIMESHEET_STATUS_STYLES = {

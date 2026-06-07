@@ -1,7 +1,13 @@
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
-import { Users } from 'lucide-react';
+import StatsCard from '@/components/StatsCard';
+import DashboardIcon, { DASHBOARD_ICON_SIZES } from '@/components/DashboardIcon';
+import { TIMESHEET_STATUS_ICONS, TIMESHEET_STATUS_STYLES } from '@/constants/dashboardIcons';
+import dashboardIcon1 from '@/assets/images/dashboard/1.png';
+import dashboardIcon3 from '@/assets/images/dashboard/3.png';
+import dashboardIcon4 from '@/assets/images/dashboard/4.png';
+import dashboardIcon20 from '@/assets/images/dashboard/20.png';
 import PageHeader from '@/components/PageHeader';
 import PageShell from '@/components/PageShell';
 import SectionLoader from '@/components/SectionLoader';
@@ -44,51 +50,41 @@ export default function TeamManagement() {
   };
 
   const staffMembers = teamMembers.filter(m => m.role === 'staff' || !m.role);
+  const completedTasks = tasks.filter(t => t.status === 'completed').length;
 
   return (
     <PageShell>
       <PageHeader
         title="Team Management"
         description="Overview of your team members, tasks, and timesheet statuses."
+        iconSrc={dashboardIcon1}
       />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-card rounded-xl border border-border p-4 text-center">
-          <p className="text-3xl font-bold text-foreground">{staffMembers.length}</p>
-          <p className="text-sm text-muted-foreground mt-1">Team Members</p>
-        </div>
-        <div className="bg-card rounded-xl border border-border p-4 text-center">
-          <p className="text-3xl font-bold text-foreground">{tasks.filter(t => t.status !== 'completed').length}</p>
-          <p className="text-sm text-muted-foreground mt-1">Open Tasks</p>
-        </div>
-        <div className="bg-card rounded-xl border border-border p-4 text-center">
-          <p className="text-3xl font-bold text-foreground">{timesheets.filter(t => t.status === 'pending').length}</p>
-          <p className="text-sm text-muted-foreground mt-1">Pending Approvals</p>
-        </div>
-        <div className="bg-card rounded-xl border border-border p-4 text-center">
-          <p className="text-3xl font-bold text-foreground">
-            {tasks.length ? `${Math.round((tasks.filter(t => t.status === 'completed').length / tasks.length) * 100)}%` : '—'}
-          </p>
-          <p className="text-sm text-muted-foreground mt-1">Completion Rate</p>
-        </div>
+        <StatsCard label="Team Members" value={staffMembers.length} iconSrc={dashboardIcon1} color="primary" />
+        <StatsCard label="Open Tasks" value={tasks.filter(t => t.status !== 'completed').length} iconSrc={dashboardIcon4} color="amber" />
+        <StatsCard label="Pending Approvals" value={timesheets.filter(t => t.status === 'pending').length} iconSrc={dashboardIcon3} color="red" />
+        <StatsCard
+          label="Completion Rate"
+          value={tasks.length ? `${Math.round((completedTasks / tasks.length) * 100)}%` : '—'}
+          iconSrc={dashboardIcon20}
+          color="green"
+        />
       </div>
 
       {isLoading ? <SectionLoader label="Loading team data..." /> : null}
 
       <div className="bg-card rounded-xl border border-border overflow-hidden">
         <div className="px-4 py-3 border-b border-border bg-muted/30">
-          <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Team Members</p>
+          <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-2">
+            <DashboardIcon src={dashboardIcon1} className={DASHBOARD_ICON_SIZES.section} />
+            Team Members
+          </p>
         </div>
         <div className="divide-y divide-border">
           {staffMembers.map(member => {
             const stats = getMemberStats(member.id);
             const sheetStatus = stats.latestSheet?.status;
-            const sheetColors = {
-              pending: 'bg-amber-100 text-amber-700',
-              approved: 'bg-emerald-100 text-emerald-700',
-              rejected: 'bg-red-100 text-red-600',
-              draft: 'bg-slate-100 text-slate-600',
-            };
             return (
               <div key={member.id} className="px-4 py-4 hover:bg-muted/20 transition-colors">
                 <div className="flex items-start justify-between gap-4">
@@ -117,11 +113,7 @@ export default function TeamManagement() {
                       <p className="text-sm font-semibold text-foreground">{stats.totalHours}h</p>
                       <p className="text-xs text-muted-foreground">Approved Hrs</p>
                     </div>
-                    {sheetStatus && (
-                      <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${sheetColors[sheetStatus] || sheetColors.draft}`}>
-                        {sheetStatus}
-                      </span>
-                    )}
+                    {sheetStatus && <TimesheetStatusBadge status={sheetStatus} />}
                     {!stats.latestSheet && (
                       <span className="text-xs text-muted-foreground">No timesheets</span>
                     )}
@@ -148,7 +140,7 @@ export default function TeamManagement() {
           })}
           {staffMembers.length === 0 && !isLoading && (
             <div className="text-center py-12">
-              <Users className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
+              <DashboardIcon src={dashboardIcon1} className={`mx-auto mb-3 opacity-40 ${DASHBOARD_ICON_SIZES.hero}`} />
               <p className="font-medium text-foreground">No team members yet</p>
               <p className="text-sm text-muted-foreground">Staff members allocated to you by the super admin will appear here.</p>
             </div>
@@ -156,5 +148,17 @@ export default function TeamManagement() {
         </div>
       </div>
     </PageShell>
+  );
+}
+
+function TimesheetStatusBadge({ status }) {
+  const iconSrc = TIMESHEET_STATUS_ICONS[status];
+  const style = TIMESHEET_STATUS_STYLES[status] || TIMESHEET_STATUS_STYLES.draft;
+
+  return (
+    <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${style}`}>
+      {iconSrc ? <DashboardIcon src={iconSrc} className={DASHBOARD_ICON_SIZES.inline} /> : null}
+      {status}
+    </span>
   );
 }

@@ -2,12 +2,25 @@ import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import StatsCard from '@/components/StatsCard';
+import DashboardIcon, { DASHBOARD_ICON_SIZES } from '@/components/DashboardIcon';
+import { TIMESHEET_STATUS_ICONS, TIMESHEET_STATUS_STYLES } from '@/constants/dashboardIcons';
+import dashboardIcon1 from '@/assets/images/dashboard/1.png';
+import dashboardIcon3 from '@/assets/images/dashboard/3.png';
+import dashboardIcon4 from '@/assets/images/dashboard/4.png';
+import dashboardIcon10 from '@/assets/images/dashboard/10.png';
+import dashboardIcon18 from '@/assets/images/dashboard/18.png';
+import dashboardIcon20 from '@/assets/images/dashboard/20.png';
 import { Link } from 'react-router-dom';
-import { Users, CheckSquare, Clock, TrendingUp, ArrowRight, AlertCircle, Info, RotateCcw } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import PageHeader from '@/components/PageHeader';
 import PageShell from '@/components/PageShell';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+
+const STATUS_LABELS = {
+  pending: 'pending',
+  revoke_pending: 'revoke request',
+};
 
 export default function AdminDashboard({ user }) {
   const { data: teamTasks = [] } = useQuery({
@@ -55,11 +68,12 @@ export default function AdminDashboard({ user }) {
       <PageHeader
         title="Team Dashboard"
         description="Overview of your team's progress and pending actions."
+        iconSrc={dashboardIcon1}
       />
 
       {assignedStaff.length === 0 && (
         <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 flex items-start gap-3">
-          <Info className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+          <DashboardIcon src={dashboardIcon18} className={`flex-shrink-0 mt-0.5 ${DASHBOARD_ICON_SIZES.section}`} />
           <div>
             <p className="text-sm font-semibold text-blue-900">
               No staff users have been allocated to you yet
@@ -72,14 +86,14 @@ export default function AdminDashboard({ user }) {
       )}
 
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-        <StatsCard label="Team Members" value={assignedStaff.length} icon={Users} color="primary" />
-        <StatsCard label="Open Tasks" value={openTasks} icon={CheckSquare} color="amber" />
-        <StatsCard label="Pending Approvals" value={pendingTimesheets.length} icon={Clock} color="red" sub="timesheets awaiting" />
-        <StatsCard label="Revoke Requests" value={revokePendingTimesheets.length} icon={RotateCcw} color="amber" sub="need your decision" />
+        <StatsCard label="Team Members" value={assignedStaff.length} iconSrc={dashboardIcon1} color="primary" />
+        <StatsCard label="Open Tasks" value={openTasks} iconSrc={dashboardIcon4} color="amber" />
+        <StatsCard label="Pending Approvals" value={pendingTimesheets.length} iconSrc={dashboardIcon3} color="red" sub="timesheets awaiting" />
+        <StatsCard label="Revoke Requests" value={revokePendingTimesheets.length} iconSrc={dashboardIcon18} color="amber" sub="need your decision" />
         <StatsCard
           label="Completion Rate"
           value={totalTasks ? `${Math.round((completedTasks / totalTasks) * 100)}%` : '0%'}
-          icon={TrendingUp}
+          iconSrc={dashboardIcon20}
           color="green"
         />
       </div>
@@ -87,7 +101,7 @@ export default function AdminDashboard({ user }) {
       {revokePendingTimesheets.length > 0 && (
         <div className="flex items-center justify-between rounded-xl border border-purple-200 bg-purple-50 p-4">
           <div className="flex items-center gap-3">
-            <RotateCcw className="h-5 w-5 text-purple-600" />
+            <DashboardIcon src={dashboardIcon18} className={DASHBOARD_ICON_SIZES.alert} />
             <div>
               <p className="text-sm font-semibold text-purple-900">
                 {revokePendingTimesheets.length} revoke request{revokePendingTimesheets.length > 1 ? 's' : ''} from your team
@@ -104,7 +118,7 @@ export default function AdminDashboard({ user }) {
       {pendingTimesheets.length > 0 && (
         <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <AlertCircle className="w-5 h-5 text-amber-600" />
+            <DashboardIcon src={dashboardIcon18} className={DASHBOARD_ICON_SIZES.alert} />
             <div>
               <p className="text-sm font-semibold text-amber-900">
                 {pendingTimesheets.length} timesheet{pendingTimesheets.length > 1 ? 's' : ''} awaiting your approval
@@ -120,7 +134,10 @@ export default function AdminDashboard({ user }) {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-card rounded-xl border border-border p-5">
-          <h2 className="font-semibold text-foreground mb-4">Task Status Breakdown</h2>
+          <h2 className="font-semibold text-foreground mb-4 flex items-center gap-2">
+            <DashboardIcon src={dashboardIcon4} className={DASHBOARD_ICON_SIZES.section} />
+            Task Status Breakdown
+          </h2>
           <ResponsiveContainer width="100%" height={220}>
             <BarChart data={taskStatusData}>
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
@@ -141,7 +158,10 @@ export default function AdminDashboard({ user }) {
 
         <div className="bg-card rounded-xl border border-border p-5">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="font-semibold text-foreground">Recent Timesheet Submissions</h2>
+            <h2 className="font-semibold text-foreground flex items-center gap-2">
+              <DashboardIcon src={dashboardIcon10} className={DASHBOARD_ICON_SIZES.section} />
+              Recent Timesheet Submissions
+            </h2>
             <Link to="/timesheets/review">
               <Button variant="ghost" size="sm" className="text-primary gap-1">
                 View All <ArrowRight className="w-3.5 h-3.5" />
@@ -157,13 +177,7 @@ export default function AdminDashboard({ user }) {
                     Week of {new Date(ts.week_start).toLocaleDateString()} · {ts.total_hours || 0}h
                   </p>
                 </div>
-                <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                  ts.status === 'revoke_pending'
-                    ? 'bg-purple-100 text-purple-700'
-                    : 'bg-amber-100 text-amber-700'
-                }`}>
-                  {ts.status === 'revoke_pending' ? 'revoke request' : 'pending'}
-                </span>
+                <TimesheetStatusBadge status={ts.status} />
               </div>
             ))}
             {pendingTimesheets.length === 0 && revokePendingTimesheets.length === 0 && (
@@ -175,5 +189,18 @@ export default function AdminDashboard({ user }) {
         </div>
       </div>
     </PageShell>
+  );
+}
+
+function TimesheetStatusBadge({ status }) {
+  const iconSrc = TIMESHEET_STATUS_ICONS[status];
+  const style = TIMESHEET_STATUS_STYLES[status] || TIMESHEET_STATUS_STYLES.draft;
+  const label = STATUS_LABELS[status] || status;
+
+  return (
+    <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium ${style}`}>
+      {iconSrc ? <DashboardIcon src={iconSrc} className={DASHBOARD_ICON_SIZES.inline} /> : null}
+      {label}
+    </span>
   );
 }

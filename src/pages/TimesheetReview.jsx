@@ -11,16 +11,25 @@ import SectionLoader from '@/components/SectionLoader';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import TimesheetEntriesPanel from '@/components/timesheets/TimesheetEntriesPanel';
-import { CheckCircle2, XCircle, Clock, ChevronDown, Calendar, AlertCircle, ClipboardCheck, Building2, RotateCcw } from 'lucide-react';
+import DashboardIcon, { DASHBOARD_ICON_SIZES } from '@/components/DashboardIcon';
+import { TIMESHEET_STATUS_ICONS, TIMESHEET_STATUS_STYLES } from '@/constants/dashboardIcons';
+import dashboardIcon3 from '@/assets/images/dashboard/3.png';
+import dashboardIcon5 from '@/assets/images/dashboard/5.png';
+import dashboardIcon10 from '@/assets/images/dashboard/10.png';
+import dashboardIcon13 from '@/assets/images/dashboard/13.png';
+import dashboardIcon18 from '@/assets/images/dashboard/18.png';
+import dashboardIcon19 from '@/assets/images/dashboard/19.png';
+import dashboardIcon20 from '@/assets/images/dashboard/20.png';
+import { CheckCircle2, XCircle, ChevronDown, Calendar, ClipboardCheck } from 'lucide-react';
 
 const STATUS_TABS = ['pending', 'revoke_pending', 'approved', 'rejected', 'all'];
 
-const STATUS_STYLES = {
-  draft: 'bg-slate-100 text-slate-600',
-  pending: 'bg-amber-100 text-amber-700',
-  approved: 'bg-emerald-100 text-emerald-700',
-  rejected: 'bg-red-100 text-red-600',
-  revoke_pending: 'bg-purple-100 text-purple-700',
+const STATUS_LABELS = {
+  pending: 'Pending Review',
+  revoke_pending: 'Revoke Requested',
+  approved: 'Approved',
+  rejected: 'Rejected',
+  draft: 'Draft',
 };
 
 const TAB_LABELS = {
@@ -193,13 +202,14 @@ export default function TimesheetReview() {
       <PageHeader
         title="Timesheet Review"
         description="Open a submitted staff timesheet, review every task and hour, then approve or reject it with feedback."
+        iconSrc={dashboardIcon10}
       />
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
-        <SummaryCard label="Pending Review" value={pendingCount} icon={AlertCircle} tone="amber" />
-        <SummaryCard label="Revoke Requests" value={revokePendingCount} icon={RotateCcw} tone="purple" />
-        <SummaryCard label="Approved" value={approvedCount} icon={CheckCircle2} tone="emerald" />
-        <SummaryCard label="Rejected" value={rejectedCount} icon={XCircle} tone="red" />
+        <SummaryCard label="Pending Review" value={pendingCount} iconSrc={dashboardIcon3} />
+        <SummaryCard label="Revoke Requests" value={revokePendingCount} iconSrc={dashboardIcon18} />
+        <SummaryCard label="Approved" value={approvedCount} iconSrc={dashboardIcon20} />
+        <SummaryCard label="Rejected" value={rejectedCount} iconSrc={dashboardIcon13} />
       </div>
 
       <div className="flex gap-2 flex-wrap">
@@ -247,7 +257,7 @@ export default function TimesheetReview() {
                       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                         <p className="truncate text-sm font-semibold text-foreground">{timesheet.user_name || 'Team Member'}</p>
                         <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-                          <Building2 className="h-3 w-3" />
+                          <DashboardIcon src={dashboardIcon19} className={DASHBOARD_ICON_SIZES.inline} />
                           {departmentName}
                         </span>
                       </div>
@@ -257,7 +267,7 @@ export default function TimesheetReview() {
                           {new Date(timesheet.week_start).toLocaleDateString()} – {new Date(timesheet.week_end).toLocaleDateString()}
                         </span>
                         <span className="inline-flex items-center gap-1">
-                          <Clock className="h-3 w-3" />
+                          <DashboardIcon src={dashboardIcon5} className={DASHBOARD_ICON_SIZES.inline} />
                           {Number(timesheet.total_hours || 0).toFixed(1)}h
                         </span>
                         <span className="inline-flex items-center gap-1">
@@ -354,7 +364,7 @@ export default function TimesheetReview() {
 
         {!filtered.length && !isLoading ? (
           <div className="rounded-xl border border-border bg-card py-12 text-center">
-            <CheckCircle2 className="mx-auto mb-3 h-10 w-10 text-emerald-400" />
+            <DashboardIcon src={dashboardIcon10} className={`mx-auto mb-3 opacity-60 ${DASHBOARD_ICON_SIZES.hero}`} />
             <p className="font-semibold text-foreground">No timesheets here yet</p>
             <p className="text-sm text-muted-foreground">Submitted staff timesheets will appear here for review.</p>
           </div>
@@ -394,20 +404,11 @@ export default function TimesheetReview() {
   );
 }
 
-function SummaryCard({ label, value, icon: Icon, tone }) {
-  const colorMap = {
-    amber: 'bg-amber-100 text-amber-700',
-    emerald: 'bg-emerald-100 text-emerald-700',
-    red: 'bg-red-100 text-red-600',
-    purple: 'bg-purple-100 text-purple-700',
-  };
-
+function SummaryCard({ label, value, iconSrc }) {
   return (
     <div className="rounded-xl border border-border bg-card p-4">
       <div className="flex items-center gap-3">
-        <div className={`rounded-lg p-2 ${colorMap[tone] || colorMap.amber}`}>
-          <Icon className="h-5 w-5" />
-        </div>
+        <DashboardIcon src={iconSrc} className={DASHBOARD_ICON_SIZES.kpi} />
         <div>
           <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
           <p className="text-2xl font-bold text-foreground">{value}</p>
@@ -418,18 +419,14 @@ function SummaryCard({ label, value, icon: Icon, tone }) {
 }
 
 function StatusBadge({ status }) {
+  const iconSrc = TIMESHEET_STATUS_ICONS[status];
+  const style = TIMESHEET_STATUS_STYLES[status] || TIMESHEET_STATUS_STYLES.draft;
+  const label = STATUS_LABELS[status] || status;
+
   return (
-    <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${STATUS_STYLES[status] || STATUS_STYLES.draft}`}>
-      {status === 'pending' ? <AlertCircle className="h-3 w-3" /> : null}
-      {status === 'approved' ? <CheckCircle2 className="h-3 w-3" /> : null}
-      {status === 'rejected' ? <XCircle className="h-3 w-3" /> : null}
-      {status === 'draft' ? <Clock className="h-3 w-3" /> : null}
-      {status === 'pending' ? 'Pending Review' : null}
-      {status === 'revoke_pending' ? 'Revoke Requested' : null}
-      {status === 'approved' ? 'Approved' : null}
-      {status === 'rejected' ? 'Rejected' : null}
-      {status === 'draft' ? 'Draft' : null}
-      {!['pending', 'revoke_pending', 'approved', 'rejected', 'draft'].includes(status) ? status : null}
+    <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${style}`}>
+      {iconSrc ? <DashboardIcon src={iconSrc} className={DASHBOARD_ICON_SIZES.inline} /> : null}
+      {label}
     </span>
   );
 }
