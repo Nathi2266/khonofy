@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
@@ -18,7 +18,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel,
   AlertDialogContent, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle
 } from '@/components/ui/alert-dialog';
-import { Plus, Search, Pencil, Trash2 } from 'lucide-react';
+import { Plus, Search, Pencil, Trash2, ChevronDown, AlertTriangle } from 'lucide-react';
 import { toast } from '@/components/ui/use-toast';
 
 const PRIORITIES = ['low', 'medium', 'high', 'urgent'];
@@ -98,6 +98,13 @@ function buildTaskPayload(form, user, { isEdit = false, assignee = null } = {}) 
   return payload;
 }
 
+function formatHours(value) {
+  const hours = Number(value);
+  if (!Number.isFinite(hours)) return '0';
+  const rounded = Math.round(hours * 100) / 100;
+  return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(2).replace(/\.?0+$/, '');
+}
+
 export default function TaskManagement() {
   const { data: user } = useCurrentUser();
   const queryClient = useQueryClient();
@@ -106,7 +113,10 @@ export default function TaskManagement() {
   const [showForm, setShowForm] = useState(false);
   const [editingTask, setEditingTask] = useState(null);
   const [deletingTask, setDeletingTask] = useState(null);
+  const [expandedTaskId, setExpandedTaskId] = useState(null);
   const [form, setForm] = useState(EMPTY_FORM);
+
+  const canViewTeamTime = user?.role === 'admin' || user?.role === 'superuser';
 
   const { data: tasks = [], isLoading } = useQuery({
     queryKey: ['tasks', user?.id, user?.role],
@@ -134,6 +144,28 @@ export default function TaskManagement() {
     },
     enabled: !!user,
   });
+
+  const { data: timeEntries = [] } = useQuery({
+    queryKey: ['teamTimeEntries', user?.id, user?.role],
+    queryFn: () => base44.entities.TimeEntry.list(),
+    enabled: !!user && canViewTeamTime,
+  });
+
+  const taskTimeStats = useMemo(() => {
+    const stats = {};
+    for (const entry of timeEntries) {
+      if (!entry.task_id) continue;
+      if (!stats[entry.task_id]) {
+        stats[entry.task_id] = { totalHours: 0, entries: [] };
+      }
+      stats[entry.task_id].totalHours += Number(entry.hours || 0);
+      stats[entry.task_id].entries.push(entry);
+    }
+    for (const taskId of Object.keys(stats)) {
+      stats[taskId].entries.sort((a, b) => new Date(b.date) - new Date(a.date));
+    }
+    return stats;
+  }, [timeEntries]);
 
   const canMultiAssignOnCreate = !editingTask;
 
@@ -347,10 +379,11 @@ export default function TaskManagement() {
 
       {/* Task table */}
       <div className="bg-card rounded-xl border border-border overflow-hidden">
-        <div className="grid grid-cols-[1fr_100px_100px_120px_80px] gap-4 px-4 py-3 border-b border-border bg-muted/30 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+        <div className="grid grid-cols-[minmax(0,1fr)_88px_88px_108px_120px_72px] gap-3 px-4 py-3 border-b border-border bg-muted/30 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
           <span>Task</span>
           <span>Priority</span>
           <span>Status</span>
+          <span>Time Logged</span>
           <span>Assignee</span>
           <span className="text-right">Actions</span>
         </div>
@@ -363,35 +396,103 @@ export default function TaskManagement() {
           </div>
         )}
         <div className="divide-y divide-border">
-          {filtered.map(task => (
-            <div key={task.id} className="grid grid-cols-[1fr_100px_100px_120px_80px] gap-4 px-4 py-3.5 items-center hover:bg-muted/20 transition-colors">
-              <div className="min-w-0">
-                <p className="font-medium text-foreground text-sm truncate">{task.title}</p>
-                {task.description && <p className="text-xs text-muted-foreground truncate mt-0.5">{task.description}</p>}
-                {task.due_date && (
-                  <p className="text-xs text-muted-foreground mt-0.5">Due {new Date(task.due_date).toLocaleDateString()}</p>
-                )}
-                {task.project_name && (
-                  <p className="text-xs text-primary mt-0.5">Project: {task.project_name}</p>
+          {filtered.map(task => {
+            const timeStats = taskTimeStats[task.id];
+            const loggedHours = timeStats?.totalHours || 0;
+            const estimatedHours = Number(task.estimated_hours);
+            const hasEstimate = Number.isFinite(estimatedHours) && estimatedHours > 0;
+            const isOverEstimate = hasEstimate && loggedHours > estimatedHours;
+            const overBy = isOverEstimate ? loggedHours - estimatedHours : 0;
+            const isExpanded = expandedTaskId === task.id;
+            const recentEntries = timeStats?.entries || [];
+
+            return (
+              <div key={task.id} className="hover:bg-muted/20 transition-colors">
+                <div className="grid grid-cols-[minmax(0,1fr)_88px_88px_108px_120px_72px] gap-3 px-4 py-3.5 items-center">
+                  <div className="min-w-0 flex items-start gap-2">
+                    {recentEntries.length > 0 ? (
+                      <button
+                        type="button"
+                        className="mt-0.5 text-muted-foreground hover:text-foreground"
+                        onClick={() => setExpandedTaskId(isExpanded ? null : task.id)}
+                        aria-label={isExpanded ? 'Hide logged time' : 'Show logged time'}
+                      >
+                        <ChevronDown className={`w-4 h-4 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                      </button>
+                    ) : (
+                      <span className="w-4 flex-shrink-0" />
+                    )}
+                    <div className="min-w-0">
+                      <p className="font-medium text-foreground text-sm truncate">{task.title}</p>
+                      {task.description && <p className="text-xs text-muted-foreground truncate mt-0.5">{task.description}</p>}
+                      {task.due_date && (
+                        <p className="text-xs text-muted-foreground mt-0.5">Due {new Date(task.due_date).toLocaleDateString()}</p>
+                      )}
+                      {task.project_name && (
+                        <p className="text-xs text-primary mt-0.5">Project: {task.project_name}</p>
+                      )}
+                    </div>
+                  </div>
+                  <span className={`text-xs font-medium px-2 py-0.5 rounded-full w-fit ${PRIORITY_COLORS[task.priority] || PRIORITY_COLORS.medium}`}>
+                    {task.priority}
+                  </span>
+                  <span className={`text-xs font-medium px-2 py-0.5 rounded-full w-fit ${STATUS_COLORS[task.status] || STATUS_COLORS.todo}`}>
+                    {task.status?.replace('_', ' ')}
+                  </span>
+                  <div className="text-xs leading-snug">
+                    <span className={isOverEstimate ? 'font-semibold text-amber-700' : 'text-foreground'}>
+                      {formatHours(loggedHours)}h logged
+                    </span>
+                    {hasEstimate && (
+                      <span className="text-muted-foreground"> / {formatHours(estimatedHours)}h est.</span>
+                    )}
+                    {isOverEstimate && (
+                      <span className="mt-1 flex items-center gap-1 text-amber-700 font-medium">
+                        <AlertTriangle className="w-3 h-3 flex-shrink-0" />
+                        +{formatHours(overBy)}h over
+                      </span>
+                    )}
+                    {!loggedHours && (
+                      <span className="block text-muted-foreground mt-0.5">No time yet</span>
+                    )}
+                  </div>
+                  <span className="text-sm text-muted-foreground truncate">{task.assigned_to_name || '—'}</span>
+                  <div className="flex items-center justify-end gap-1">
+                    <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground" onClick={() => openEdit(task)}>
+                      <Pencil className="w-3.5 h-3.5" />
+                    </Button>
+                    <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive" onClick={() => setDeletingTask(task)}>
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </Button>
+                  </div>
+                </div>
+
+                {isExpanded && recentEntries.length > 0 && (
+                  <div className="border-t border-border bg-muted/20 px-4 py-3 pl-10">
+                    <p className="text-xs font-medium text-muted-foreground mb-2">
+                      Calendar time logged ({recentEntries.length} {recentEntries.length === 1 ? 'entry' : 'entries'})
+                    </p>
+                    <div className="space-y-1.5 max-h-48 overflow-y-auto">
+                      {recentEntries.map((entry) => (
+                        <div key={entry.id} className="flex items-start justify-between gap-3 rounded-lg bg-background px-3 py-2 text-xs">
+                          <div className="min-w-0">
+                            <p className="font-medium text-foreground">
+                              {new Date(entry.date).toLocaleDateString()}
+                              {entry.user_name ? ` · ${entry.user_name}` : ''}
+                            </p>
+                            <p className="text-muted-foreground mt-0.5 truncate">
+                              {entry.description || 'No description'}
+                            </p>
+                          </div>
+                          <span className="font-semibold text-foreground flex-shrink-0">{formatHours(entry.hours)}h</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 )}
               </div>
-              <span className={`text-xs font-medium px-2 py-0.5 rounded-full w-fit ${PRIORITY_COLORS[task.priority] || PRIORITY_COLORS.medium}`}>
-                {task.priority}
-              </span>
-              <span className={`text-xs font-medium px-2 py-0.5 rounded-full w-fit ${STATUS_COLORS[task.status] || STATUS_COLORS.todo}`}>
-                {task.status?.replace('_', ' ')}
-              </span>
-              <span className="text-sm text-muted-foreground truncate">{task.assigned_to_name || '—'}</span>
-              <div className="flex items-center justify-end gap-1">
-                <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground" onClick={() => openEdit(task)}>
-                  <Pencil className="w-3.5 h-3.5" />
-                </Button>
-                <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive" onClick={() => setDeletingTask(task)}>
-                  <Trash2 className="w-3.5 h-3.5" />
-                </Button>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
 
@@ -410,6 +511,31 @@ export default function TaskManagement() {
               <label className="text-sm font-medium mb-1.5 block">Description</label>
               <Textarea placeholder="Task description..." value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={3} />
             </div>
+            {editingTask && canViewTeamTime && (
+              (() => {
+                const loggedHours = taskTimeStats[editingTask.id]?.totalHours || 0;
+                const estimatedHours = Number(editingTask.estimated_hours);
+                const hasEstimate = Number.isFinite(estimatedHours) && estimatedHours > 0;
+                const isOverEstimate = hasEstimate && loggedHours > estimatedHours;
+                return (
+                  <div className={`rounded-lg border px-3 py-2 text-sm ${isOverEstimate ? 'border-amber-300 bg-amber-50 text-amber-900' : 'border-border bg-muted/30 text-foreground'}`}>
+                    <p className="font-medium">
+                      Staff logged {formatHours(loggedHours)}h
+                      {hasEstimate ? ` of ${formatHours(estimatedHours)}h estimated` : ''}
+                    </p>
+                    {isOverEstimate && (
+                      <p className="text-xs mt-1 flex items-center gap-1">
+                        <AlertTriangle className="w-3.5 h-3.5" />
+                        {formatHours(loggedHours - estimatedHours)}h over the estimate
+                      </p>
+                    )}
+                    {!loggedHours && (
+                      <p className="text-xs text-muted-foreground mt-1">No calendar time logged yet.</p>
+                    )}
+                  </div>
+                );
+              })()
+            )}
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="text-sm font-medium mb-1.5 block">Priority</label>

@@ -27,12 +27,12 @@ const STATUS_COLORS = {
   blocked: 'bg-red-100 text-red-600',
 };
 
-const TASK_STATUS_OPTIONS = [
-  { value: 'todo', label: 'To Do' },
-  { value: 'in_progress', label: 'In Progress' },
-  { value: 'completed', label: 'Completed' },
-  { value: 'blocked', label: 'Blocked' },
-];
+const STATUS_LABELS = {
+  todo: 'To Do',
+  in_progress: 'In Progress',
+  completed: 'Completed',
+  blocked: 'Blocked',
+};
 
 export default function DailyTaskLog() {
   const { data: user } = useCurrentUser();
@@ -102,6 +102,7 @@ export default function DailyTaskLog() {
       queryClient.invalidateQueries({ queryKey: ['teamTimesheets'] });
       queryClient.invalidateQueries({ queryKey: ['allTimesheets'] });
       queryClient.invalidateQueries({ queryKey: ['pendingTimesheets'] });
+      queryClient.invalidateQueries({ queryKey: ['myTasks'] });
       if (user) await logActivity(user, 'Logged time', 'TimeEntry', entry.id, `${logForm.hours}h on "${selectedTask?.title}"`);
       // Save template if checked
       if (logForm.saveAsTemplate && selectedTask) {
@@ -157,6 +158,7 @@ export default function DailyTaskLog() {
       queryClient.invalidateQueries({ queryKey: ['teamTimesheets'] });
       queryClient.invalidateQueries({ queryKey: ['allTimesheets'] });
       queryClient.invalidateQueries({ queryKey: ['pendingTimesheets'] });
+      queryClient.invalidateQueries({ queryKey: ['myTasks'] });
       if (user) await logActivity(user, 'Bulk logged time', 'TimeEntry', '', `${bulkForm.hours}h × ${selectedIds.size} tasks`);
       setSelectedIds(new Set());
       setShowBulkLog(false);
@@ -167,11 +169,6 @@ export default function DailyTaskLog() {
   const deleteTemplateMutation = useMutation({
     mutationFn: (id) => base44.entities.TaskTemplate.delete(id),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['templates'] }),
-  });
-
-  const updateTaskMutation = useMutation({
-    mutationFn: ({ id, data }) => base44.entities.Task.update(id, data),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['myTasks'] }),
   });
 
   const hoursToday = todayEntries.reduce((sum, e) => sum + (e.hours || 0), 0);
@@ -386,7 +383,7 @@ export default function DailyTaskLog() {
                     {task.description && <p className="text-muted-foreground text-xs mt-0.5 line-clamp-1">{task.description}</p>}
                     <div className="flex items-center gap-2 mt-2">
                       <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${STATUS_COLORS[task.status] || STATUS_COLORS.todo}`}>
-                        {task.status?.replace('_', ' ')}
+                        {STATUS_LABELS[task.status] || STATUS_LABELS.todo}
                       </span>
                       <span className="text-xs text-muted-foreground">{totalLogged}h logged</span>
                       {task.estimated_hours && <span className="text-xs text-muted-foreground">/ {task.estimated_hours}h est.</span>}
@@ -421,14 +418,14 @@ export default function DailyTaskLog() {
 
               {isExpanded && (
                 <div className="border-t border-border px-4 pb-4 pt-3 bg-muted/20">
-                  <div className="flex items-center gap-3 mb-3">
-                    <label className="text-xs font-medium text-muted-foreground">Update Status:</label>
-                    <FormSelect
-                      size="compact"
-                      value={task.status}
-                      onValueChange={(status) => updateTaskMutation.mutate({ id: task.id, data: { status } })}
-                      options={TASK_STATUS_OPTIONS}
-                    />
+                  <div className="flex flex-wrap items-center gap-2 mb-3">
+                    <span className="text-xs font-medium text-muted-foreground">Status:</span>
+                    <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${STATUS_COLORS[task.status] || STATUS_COLORS.todo}`}>
+                      {STATUS_LABELS[task.status] || STATUS_LABELS.todo}
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      Log time to move to In Progress · Submit your timesheet to complete
+                    </span>
                   </div>
                   {taskEntries.length > 0 && (
                     <div className="space-y-1.5">

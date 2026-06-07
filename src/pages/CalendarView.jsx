@@ -211,6 +211,7 @@ export default function CalendarView() {
     queryClient.invalidateQueries({ queryKey: ['teamTimesheets'] });
     queryClient.invalidateQueries({ queryKey: ['allTimesheets'] });
     queryClient.invalidateQueries({ queryKey: ['pendingTimesheets'] });
+    queryClient.invalidateQueries({ queryKey: ['myTasks'] });
   };
 
   const createEntry = useMutation({

@@ -66,6 +66,7 @@ function invalidateTimesheetQueries(queryClient) {
   queryClient.invalidateQueries({ queryKey: ['pendingTimesheets'] });
   queryClient.invalidateQueries({ queryKey: ['revokePendingTimesheets'] });
   queryClient.invalidateQueries({ queryKey: ['projectApprovedStats'] });
+  queryClient.invalidateQueries({ queryKey: ['myTasks'] });
 }
 
 const STATUS_CONFIG = {

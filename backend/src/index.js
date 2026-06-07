@@ -252,6 +252,38 @@ function canStaffRevokeApprovedTimesheet(timesheet) {
   return Date.now() - reviewedAt.getTime() <= TIMESHEET_REVOKE_WINDOW_MS;
 }
 
+async function maybeAdvanceTaskToInProgress(taskId, userId) {
+  if (!taskId) return;
+  const task = await prisma.task.findUnique({ where: { id: taskId } });
+  if (!task || task.assignedTo !== userId || task.status !== 'todo') return;
+  await prisma.task.update({
+    where: { id: taskId },
+    data: { status: 'in_progress' },
+  });
+}
+
+async function maybeCompleteTasksForPendingTimesheet(timesheetId, userId) {
+  if (!timesheetId) return;
+  const timesheet = await prisma.timesheet.findUnique({ where: { id: timesheetId } });
+  if (!timesheet || timesheet.status !== 'pending' || timesheet.userId !== userId) return;
+
+  const entries = await prisma.timeEntry.findMany({
+    where: { timesheetId, userId, taskId: { not: null } },
+    select: { taskId: true },
+  });
+  const taskIds = [...new Set(entries.map((entry) => entry.taskId).filter(Boolean))];
+  if (taskIds.length === 0) return;
+
+  await prisma.task.updateMany({
+    where: {
+      id: { in: taskIds },
+      assignedTo: userId,
+      status: { in: ['todo', 'in_progress'] },
+    },
+    data: { status: 'completed' },
+  });
+}
+
 async function applyStaffTimesheetStatusChange(existing, payload, user) {
   if (user.role !== 'staff' || existing.userId !== user.id || payload.status === undefined) {
     return payload;
@@ -887,6 +919,10 @@ async function handleCreate(resource, user, body) {
     await assertNoTimeEntryOverlap(normalizedEntry);
     const record = await prisma[cfg.model].create({ data: normalizedEntry });
     await refreshTimesheetTotals(record.timesheetId);
+    if (user.role === 'staff') {
+      await maybeAdvanceTaskToInProgress(record.taskId, user.id);
+      await maybeCompleteTasksForPendingTimesheet(record.timesheetId, user.id);
+    }
     await writeActivityLog(
       user,
       'Entry Created',
@@ -967,6 +1003,9 @@ async function handleCreate(resource, user, body) {
   }
 
   const record = await prisma[cfg.model].create({ data: payload });
+  if (cfg.model === 'timesheet' && user.role === 'staff' && record.status === 'pending') {
+    await maybeCompleteTasksForPendingTimesheet(record.id, user.id);
+  }
   return serializeRecord(cfg.serialize, record);
 }
 
@@ -1020,6 +1059,9 @@ async function handleUpdate(resource, user, id, body) {
     }
     await validateProjectAndClient(payload);
     payload = sanitizeTaskPayload(payload);
+    if (user.role === 'staff') {
+      delete payload.status;
+    }
   }
 
   if (cfg.model === 'project') {
@@ -1104,8 +1146,26 @@ async function handleUpdate(resource, user, id, body) {
       await refreshTimesheetTotals(previousTimesheetId);
     }
     await refreshTimesheetTotals(record.timesheetId);
+    if (user.role === 'staff') {
+      await maybeAdvanceTaskToInProgress(record.taskId, user.id);
+      await maybeCompleteTasksForPendingTimesheet(record.timesheetId, user.id);
+    }
     const change = describeEntryChange(existing, normalizedEntry);
     await writeActivityLog(user, change.action, 'TimeEntry', record.id, change.details, record.departmentId);
+    return serializeRecord(cfg.serialize, record);
+  }
+
+  if (cfg.model === 'timesheet') {
+    const nextStatus = payload.status !== undefined ? payload.status : existing.status;
+    const record = await prisma[cfg.model].update({ where: { id }, data: payload });
+    if (
+      user.role === 'staff'
+      && existing.userId === user.id
+      && nextStatus === 'pending'
+      && existing.status !== 'pending'
+    ) {
+      await maybeCompleteTasksForPendingTimesheet(record.id, user.id);
+    }
     return serializeRecord(cfg.serialize, record);
   }
 
