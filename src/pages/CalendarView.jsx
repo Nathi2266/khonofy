@@ -21,6 +21,7 @@ import {
   buildRecurringOccurrences,
   createDefaultRecurringState,
 } from '@/components/calendar/recurringEntryUtils';
+import { parseEntryTags, primaryTagColor, serializeEntryTags } from '@/utils/entryTags';
 import CalendarWeekGrid from '@/components/calendar/CalendarWeekGrid';
 import {
   HOUR_HEIGHT,
@@ -36,6 +37,7 @@ import {
 const VIEW_OPTIONS = ['Day', 'Week', 'Month'];
 
 function toTimeEntryPayload(payload) {
+  const tagFields = serializeEntryTags(payload.tags);
   return {
     task_id: payload.task_id || '',
     task_title: payload.task_title || '',
@@ -44,9 +46,9 @@ function toTimeEntryPayload(payload) {
     project_name: payload.project_name || '',
     client_id: payload.client_id || '',
     client_name: payload.client_name || '',
-    tag_id: payload.tag_id || '',
-    tag_name: payload.tag_name || '',
-    tag_color: payload.tag_color || '',
+    tag_id: tagFields.tag_id,
+    tag_name: tagFields.tag_name,
+    tag_color: tagFields.tag_color,
     billable: Boolean(payload.billable),
     department_id: payload.department_id || '',
     user_id: payload.user_id || '',
@@ -65,6 +67,8 @@ function createEntryForm(entry, user) {
         endAt: addMinutes(new Date(), 60),
       };
 
+  const entryTags = parseEntryTags(entry);
+
   return {
     id: entry?.id || null,
     task_id: entry?.task_id || '',
@@ -72,12 +76,10 @@ function createEntryForm(entry, user) {
     description: entry?.description || '',
     project_id: entry?.project_id || '',
     project_name: entry?.project_name || '',
-    project_color: entry?.project_color || entry?.tag_color || '',
+    project_color: entry?.project_color || primaryTagColor(entryTags) || entry?.tag_color || '',
     client_id: entry?.client_id || '',
     client_name: entry?.client_name || '',
-    tag_id: entry?.tag_id || '',
-    tag_name: entry?.tag_name || '',
-    tag_color: entry?.tag_color || '',
+    tags: entryTags,
     billable: Boolean(entry?.billable),
     department_id: entry?.department_id || user?.department_id || '',
     user_id: entry?.user_id || user?.id || '',

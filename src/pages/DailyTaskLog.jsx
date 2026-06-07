@@ -9,6 +9,7 @@ import PageShell from '@/components/PageShell';
 import SectionLoader from '@/components/SectionLoader';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import FormSelect from '@/components/ui/FormSelect';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import DashboardIcon, { DASHBOARD_ICON_SIZES } from '@/components/DashboardIcon';
 import dashboardIcon4 from '@/assets/images/dashboard/4.png';
@@ -25,6 +26,13 @@ const STATUS_COLORS = {
   completed: 'bg-emerald-100 text-emerald-700',
   blocked: 'bg-red-100 text-red-600',
 };
+
+const TASK_STATUS_OPTIONS = [
+  { value: 'todo', label: 'To Do' },
+  { value: 'in_progress', label: 'In Progress' },
+  { value: 'completed', label: 'Completed' },
+  { value: 'blocked', label: 'Blocked' },
+];
 
 export default function DailyTaskLog() {
   const { data: user } = useCurrentUser();
@@ -415,16 +423,12 @@ export default function DailyTaskLog() {
                 <div className="border-t border-border px-4 pb-4 pt-3 bg-muted/20">
                   <div className="flex items-center gap-3 mb-3">
                     <label className="text-xs font-medium text-muted-foreground">Update Status:</label>
-                    <select
-                      className="text-xs border border-border rounded-md px-2 py-1 bg-background"
+                    <FormSelect
+                      size="compact"
                       value={task.status}
-                      onChange={(e) => updateTaskMutation.mutate({ id: task.id, data: { status: e.target.value } })}
-                    >
-                      <option value="todo">To Do</option>
-                      <option value="in_progress">In Progress</option>
-                      <option value="completed">Completed</option>
-                      <option value="blocked">Blocked</option>
-                    </select>
+                      onValueChange={(status) => updateTaskMutation.mutate({ id: task.id, data: { status } })}
+                      options={TASK_STATUS_OPTIONS}
+                    />
                   </div>
                   {taskEntries.length > 0 && (
                     <div className="space-y-1.5">
@@ -504,17 +508,29 @@ export default function DailyTaskLog() {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="text-sm font-medium text-foreground mb-1.5 block">Project</label>
-                <select className="w-full text-sm border border-border rounded-lg px-3 py-2 bg-background" value={logForm.project_id} onChange={(e) => handleProjectChange(e.target.value, true)}>
-                  <option value="">No project</option>
-                  {projects.filter((project) => project.is_active || project.id === logForm.project_id).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                </select>
+                <FormSelect
+                  value={logForm.project_id}
+                  onValueChange={(projectId) => handleProjectChange(projectId, true)}
+                  placeholder="No project"
+                  options={[
+                    { value: '', label: 'No project' },
+                    ...projects
+                      .filter((project) => project.is_active || project.id === logForm.project_id)
+                      .map((project) => ({ value: project.id, label: project.name })),
+                  ]}
+                />
               </div>
               <div>
                 <label className="text-sm font-medium text-foreground mb-1.5 block">Tag</label>
-                <select className="w-full text-sm border border-border rounded-lg px-3 py-2 bg-background" value={logForm.tag_id} onChange={(e) => handleTagChange(e.target.value, true)}>
-                  <option value="">No tag</option>
-                  {tags.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-                </select>
+                <FormSelect
+                  value={logForm.tag_id}
+                  onValueChange={(tagId) => handleTagChange(tagId, true)}
+                  placeholder="No tag"
+                  options={[
+                    { value: '', label: 'No tag' },
+                    ...tags.map((tag) => ({ value: tag.id, label: tag.name })),
+                  ]}
+                />
               </div>
             </div>
             {logForm.tag_id && (
@@ -579,17 +595,29 @@ export default function DailyTaskLog() {
             <div className="grid grid-cols-2 gap-3 pt-1">
               <div>
                 <label className="text-sm font-medium mb-1.5 block">Project</label>
-                <select className="w-full text-sm border border-border rounded-lg px-3 py-2 bg-background" value={bulkForm.project_id} onChange={(e) => handleProjectChange(e.target.value, false)}>
-                  <option value="">No project</option>
-                  {projects.filter((project) => project.is_active || project.id === bulkForm.project_id).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                </select>
+                <FormSelect
+                  value={bulkForm.project_id}
+                  onValueChange={(projectId) => handleProjectChange(projectId, false)}
+                  placeholder="No project"
+                  options={[
+                    { value: '', label: 'No project' },
+                    ...projects
+                      .filter((project) => project.is_active || project.id === bulkForm.project_id)
+                      .map((project) => ({ value: project.id, label: project.name })),
+                  ]}
+                />
               </div>
               <div>
                 <label className="text-sm font-medium mb-1.5 block">Tag</label>
-                <select className="w-full text-sm border border-border rounded-lg px-3 py-2 bg-background" value={bulkForm.tag_id} onChange={(e) => handleTagChange(e.target.value, false)}>
-                  <option value="">No tag</option>
-                  {tags.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-                </select>
+                <FormSelect
+                  value={bulkForm.tag_id}
+                  onValueChange={(tagId) => handleTagChange(tagId, false)}
+                  placeholder="No tag"
+                  options={[
+                    { value: '', label: 'No tag' },
+                    ...tags.map((tag) => ({ value: tag.id, label: tag.name })),
+                  ]}
+                />
               </div>
             </div>
             <div className="pt-1">

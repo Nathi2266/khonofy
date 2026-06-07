@@ -11,6 +11,8 @@ import DashboardIcon, { DASHBOARD_ICON_SIZES } from '@/components/DashboardIcon'
 import dashboardIcon4 from '@/assets/images/dashboard/4.png';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import FormSelect from '@/components/ui/FormSelect';
+import StaffMultiSelect from '@/components/ui/StaffMultiSelect';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel,
@@ -43,12 +45,13 @@ const EMPTY_FORM = {
   status: 'todo',
   assigned_to: '',
   assigned_to_name: '',
+  assigned_staff: [],
   estimated_hours: '',
   project_id: '',
   project_name: '',
 };
 
-function buildTaskPayload(form, user, { isEdit = false } = {}) {
+function buildTaskPayload(form, user, { isEdit = false, assignee = null } = {}) {
   /** @type {Record<string, unknown>} */
   const payload = {
     title: form.title.trim(),
@@ -61,9 +64,12 @@ function buildTaskPayload(form, user, { isEdit = false } = {}) {
 
   if (form.due_date) payload.due_date = form.due_date;
 
-  if (form.assigned_to) {
-    payload.assigned_to = form.assigned_to;
-    payload.assigned_to_name = form.assigned_to_name || undefined;
+  const assignedTo = assignee?.id ?? form.assigned_to;
+  const assignedToName = assignee?.full_name ?? form.assigned_to_name;
+
+  if (assignedTo) {
+    payload.assigned_to = assignedTo;
+    payload.assigned_to_name = assignedToName || undefined;
   } else if (isEdit) {
     payload.assigned_to = null;
     payload.assigned_to_name = null;
@@ -114,14 +120,22 @@ export default function TaskManagement() {
   });
 
   const { data: staffUsers = [] } = useQuery({
-    queryKey: ['staffUsers', user?.id],
+    queryKey: ['staffUsers', user?.id, user?.role, user?.admin_id],
     queryFn: async () => {
-      const users = await base44.entities.User.filter({ role: 'staff' });
-      if (user?.role === 'admin') return users.filter((staffUser) => staffUser.admin_id === user.id);
-      return users;
+      const users = await base44.entities.User.list();
+      const staff = users.filter((staffUser) => staffUser.role === 'staff');
+      if (user?.role === 'admin') {
+        return staff.filter((staffUser) => staffUser.admin_id === user.id);
+      }
+      if (user?.role === 'staff') {
+        return staff.filter((staffUser) => staffUser.admin_id === user.admin_id);
+      }
+      return staff;
     },
     enabled: !!user,
   });
+
+  const canMultiAssignOnCreate = !editingTask;
 
   const { data: projects = [] } = useQuery({
     queryKey: ['taskProjects', user?.department_id, user?.role],
@@ -151,6 +165,53 @@ export default function TaskManagement() {
     onError: (error) => {
       toast({
         title: 'Could not create task',
+        description: error?.message || 'Please check the form and try again.',
+        variant: 'destructive',
+        centered: true,
+      });
+    },
+  });
+
+  const createMultipleTasks = useMutation({
+    mutationFn: async (assignees) => {
+      const basePayload = buildTaskPayload(
+        { ...form, assigned_to: '', assigned_to_name: '' },
+        user,
+      );
+      return Promise.all(
+        assignees.map((member) =>
+          base44.entities.Task.create({
+            ...basePayload,
+            assigned_to: member.id,
+            assigned_to_name: member.full_name || undefined,
+          }),
+        ),
+      );
+    },
+    onSuccess: async (tasks) => {
+      await queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      await queryClient.invalidateQueries({ queryKey: ['myTasks'] });
+      closeForm();
+      const assigneeNames = tasks.map((task) => task.assigned_to_name).filter(Boolean);
+      toast({
+        title: tasks.length === 1 ? 'Task created' : `${tasks.length} tasks created`,
+        description: assigneeNames.length
+          ? `"${form.title}" was assigned to ${assigneeNames.join(', ')}.`
+          : `"${form.title}" was created successfully.`,
+        centered: true,
+        duration: 3000,
+      });
+      if (user) {
+        await Promise.all(
+          tasks.map((task) =>
+            logActivity(user, 'Created task', 'Task', task.id, `"${task.title}"`),
+          ),
+        );
+      }
+    },
+    onError: (error) => {
+      toast({
+        title: 'Could not create tasks',
         description: error?.message || 'Please check the form and try again.',
         variant: 'destructive',
         centered: true,
@@ -196,6 +257,7 @@ export default function TaskManagement() {
       status: task.status || 'todo',
       assigned_to: task.assigned_to || '',
       assigned_to_name: task.assigned_to_name || '',
+      assigned_staff: [],
       estimated_hours: task.estimated_hours || '',
       project_id: task.project_id || '',
       project_name: task.project_name || '',
@@ -207,17 +269,25 @@ export default function TaskManagement() {
 
   const handleSubmit = () => {
     if (!form.title.trim()) return;
-    const payload = buildTaskPayload(form, user, { isEdit: !!editingTask });
     if (editingTask) {
+      const payload = buildTaskPayload(form, user, { isEdit: true });
       updateTask.mutate({ id: editingTask.id, data: payload });
-    } else {
-      createTask.mutate(payload);
+      return;
     }
+    if (!editingTask && form.assigned_staff.length > 0) {
+      createMultipleTasks.mutate(form.assigned_staff);
+      return;
+    }
+    createTask.mutate(buildTaskPayload(form, user));
   };
 
   const handleAssigneeChange = (userId) => {
     const member = staffUsers.find(u => u.id === userId);
     setForm({ ...form, assigned_to: userId, assigned_to_name: member?.full_name || '' });
+  };
+
+  const handleAssigneesChange = (assignees) => {
+    setForm({ ...form, assigned_staff: assignees });
   };
 
   const handleProjectChange = (projectId) => {
@@ -326,7 +396,7 @@ export default function TaskManagement() {
       </div>
 
       {/* Create/Edit Dialog */}
-      <Dialog open={showForm} onOpenChange={closeForm}>
+      <Dialog open={showForm} onOpenChange={(open) => { if (!open) closeForm(); }}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle>{editingTask ? 'Edit Task' : 'Create New Task'}</DialogTitle>
@@ -343,15 +413,22 @@ export default function TaskManagement() {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="text-sm font-medium mb-1.5 block">Priority</label>
-                <select className="w-full text-sm border border-border rounded-lg px-3 py-2 bg-background" value={form.priority} onChange={(e) => setForm({ ...form, priority: e.target.value })}>
-                  {PRIORITIES.map(p => <option key={p} value={p}>{p}</option>)}
-                </select>
+                <FormSelect
+                  value={form.priority}
+                  onValueChange={(priority) => setForm({ ...form, priority })}
+                  options={PRIORITIES.map((priority) => ({ value: priority, label: priority }))}
+                />
               </div>
               <div>
                 <label className="text-sm font-medium mb-1.5 block">Status</label>
-                <select className="w-full text-sm border border-border rounded-lg px-3 py-2 bg-background" value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
-                  {STATUSES.map(s => <option key={s} value={s}>{s.replace('_', ' ')}</option>)}
-                </select>
+                <FormSelect
+                  value={form.status}
+                  onValueChange={(status) => setForm({ ...form, status })}
+                  options={STATUSES.map((status) => ({
+                    value: status,
+                    label: status.replace('_', ' '),
+                  }))}
+                />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
@@ -366,31 +443,61 @@ export default function TaskManagement() {
             </div>
             <div>
               <label className="text-sm font-medium mb-1.5 block">Project</label>
-              <select
-                className="w-full text-sm border border-border rounded-lg px-3 py-2 bg-background"
+              <FormSelect
                 value={form.project_id}
-                onChange={(e) => handleProjectChange(e.target.value)}
-              >
-                <option value="">No project</option>
-                {projects.filter((project) => project.is_active || project.id === form.project_id).map((project) => (
-                  <option key={project.id} value={project.id}>
-                    {project.name}
-                  </option>
-                ))}
-              </select>
+                onValueChange={handleProjectChange}
+                placeholder="No project"
+                options={[
+                  { value: '', label: 'No project' },
+                  ...projects
+                    .filter((project) => project.is_active || project.id === form.project_id)
+                    .map((project) => ({ value: project.id, label: project.name })),
+                ]}
+              />
             </div>
             <div>
-              <label className="text-sm font-medium mb-1.5 block">Assign To</label>
-              <select className="w-full text-sm border border-border rounded-lg px-3 py-2 bg-background" value={form.assigned_to} onChange={(e) => handleAssigneeChange(e.target.value)}>
-                <option value="">Unassigned</option>
-                {staffUsers.map(u => <option key={u.id} value={u.id}>{u.full_name || u.email}</option>)}
-              </select>
+              <label className="text-sm font-medium mb-1.5 block">
+                Assign To{canMultiAssignOnCreate ? ' (multiple)' : ''}
+              </label>
+              {canMultiAssignOnCreate ? (
+                <StaffMultiSelect
+                  options={staffUsers}
+                  value={form.assigned_staff}
+                  onChange={handleAssigneesChange}
+                  placeholder="Unassigned (select staff)"
+                />
+              ) : (
+                <FormSelect
+                  value={form.assigned_to}
+                  onValueChange={handleAssigneeChange}
+                  placeholder="Unassigned"
+                  options={[
+                    { value: '', label: 'Unassigned' },
+                    ...staffUsers.map((staffUser) => ({
+                      value: staffUser.id,
+                      label: staffUser.full_name || staffUser.email,
+                    })),
+                  ]}
+                />
+              )}
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={closeForm}>Cancel</Button>
-            <Button onClick={handleSubmit} disabled={!form.title.trim() || createTask.isPending || updateTask.isPending}>
-              {createTask.isPending || updateTask.isPending ? 'Saving...' : editingTask ? 'Save Changes' : 'Create Task'}
+            <Button
+              onClick={handleSubmit}
+              disabled={
+                !form.title.trim()
+                || createTask.isPending
+                || createMultipleTasks.isPending
+                || updateTask.isPending
+              }
+            >
+              {createTask.isPending || createMultipleTasks.isPending || updateTask.isPending
+                ? 'Saving...'
+                : editingTask
+                  ? 'Save Changes'
+                  : 'Create Task'}
             </Button>
           </DialogFooter>
         </DialogContent>

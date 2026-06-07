@@ -21,6 +21,7 @@ const SIDEBAR_ICON_CLASS = 'w-10 h-10 flex-shrink-0 object-contain';
 const STAFF_NAV = [
   { path: '/', label: 'Dashboard', iconSrc: sidebarIcon1 },
   { path: '/daily-log', label: 'Task Log', iconSrc: sidebarIcon4 },
+  { path: '/tasks', label: 'Task Management', iconSrc: sidebarIcon4 },
   { path: '/calendar', label: 'Calendar', iconSrc: calendarIcon },
   { path: '/timesheets', label: 'Timesheets', iconSrc: sidebarIcon3 },
 ];

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { Input } from '@/components/ui/input';
+import FormSelect from '@/components/ui/FormSelect';
 import { Search, Filter } from 'lucide-react';
 import DashboardIcon, { DASHBOARD_ICON_SIZES } from '@/components/DashboardIcon';
 import dashboardIcon17 from '@/assets/images/dashboard/17.png';
@@ -72,15 +73,16 @@ export default function AuditTrail() {
         </div>
         <div className="flex items-center gap-2">
           <Filter className="h-4 w-4 text-muted-foreground" />
-          <select
-            className="rounded-lg border border-border bg-background px-3 py-2 text-sm"
+          <FormSelect
+            size="compact"
+            className="min-w-[10rem]"
             value={entityFilter}
-            onChange={(e) => setEntityFilter(e.target.value)}
-          >
-            {entityTypes.map(t => (
-              <option key={t} value={t}>{t === 'all' ? 'All Types' : t}</option>
-            ))}
-          </select>
+            onValueChange={setEntityFilter}
+            options={entityTypes.map((type) => ({
+              value: type,
+              label: type === 'all' ? 'All Types' : type,
+            }))}
+          />
         </div>
         <p className="text-sm text-muted-foreground">{filtered.length} records</p>
       </div>

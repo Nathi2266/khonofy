@@ -7,6 +7,9 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { parseDateTimeInput, toDateInputValue, toTimeInputValue } from './calendarMath';
+import FormSelect from '@/components/ui/FormSelect';
+import TagMultiSelect from './TagMultiSelect';
+import { parseEntryTags } from '@/utils/entryTags';
 import {
   WEEKDAY_OPTIONS,
   countRecurringOccurrences,
@@ -76,13 +79,10 @@ export default function CalendarEntryModal({
     }));
   };
 
-  const handleTagChange = (tagId) => {
-    const tag = tags.find((item) => item.id === tagId);
+  const handleTagsChange = (nextTags) => {
     setForm((current) => ({
       ...current,
-      tag_id: tagId,
-      tag_name: tag?.name || '',
-      tag_color: tag?.color || '',
+      tags: nextTags,
     }));
   };
 
@@ -128,13 +128,12 @@ export default function CalendarEntryModal({
   };
 
   const applyTemplate = (template) => {
+    const templateTags = parseEntryTags(template);
     setForm((current) => ({
       ...current,
       task_title: template.title,
       description: template.description || '',
-      tag_id: template.tag_id || '',
-      tag_name: template.tag_name || '',
-      tag_color: template.tag_color || '',
+      tags: templateTags,
       end_at: new Date(
         current.start_at.getTime() + Number(template.estimated_hours || 1) * 60 * 60 * 1000
       ),
@@ -231,60 +230,57 @@ export default function CalendarEntryModal({
 
             <div>
               <label className="mb-1.5 block text-sm font-medium">Client</label>
-              <select
-                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
+              <FormSelect
                 value={form.client_id}
-                onChange={(event) => handleClientChange(event.target.value)}
-              >
-                <option value="">No client</option>
-                {clients.filter((client) => client.is_active || client.id === form.client_id).map((client) => (
-                  <option key={client.id} value={client.id}>{client.name}</option>
-                ))}
-              </select>
+                onValueChange={handleClientChange}
+                placeholder="No client"
+                options={[
+                  { value: '', label: 'No client' },
+                  ...clients
+                    .filter((client) => client.is_active || client.id === form.client_id)
+                    .map((client) => ({ value: client.id, label: client.name })),
+                ]}
+              />
             </div>
 
             <div>
               <label className="mb-1.5 block text-sm font-medium">Project</label>
-              <select
-                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
+              <FormSelect
                 value={form.project_id}
-                onChange={(event) => handleProjectChange(event.target.value)}
-              >
-                <option value="">No project</option>
-                {projects
-                  .filter((project) => (project.is_active || project.id === form.project_id) && (!form.client_id || project.client_id === form.client_id))
-                  .map((project) => (
-                    <option key={project.id} value={project.id}>{project.name}</option>
-                  ))}
-              </select>
+                onValueChange={handleProjectChange}
+                placeholder="No project"
+                options={[
+                  { value: '', label: 'No project' },
+                  ...projects
+                    .filter((project) => (project.is_active || project.id === form.project_id) && (!form.client_id || project.client_id === form.client_id))
+                    .map((project) => ({ value: project.id, label: project.name })),
+                ]}
+              />
             </div>
 
             <div>
               <label className="mb-1.5 block text-sm font-medium">Task</label>
-              <select
-                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
+              <FormSelect
                 value={form.task_id}
-                onChange={(event) => handleTaskChange(event.target.value)}
-              >
-                <option value="">No linked task</option>
-                {filteredTasks.map((task) => (
-                  <option key={task.id} value={task.id}>{task.title}</option>
-                ))}
-              </select>
+                onValueChange={handleTaskChange}
+                placeholder="No linked task"
+                options={[
+                  { value: '', label: 'No linked task' },
+                  ...filteredTasks.map((task) => ({ value: task.id, label: task.title })),
+                ]}
+              />
             </div>
 
-            <div>
-              <label className="mb-1.5 block text-sm font-medium">Tag</label>
-              <select
-                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
-                value={form.tag_id}
-                onChange={(event) => handleTagChange(event.target.value)}
-              >
-                <option value="">No tag</option>
-                {tags.map((tag) => (
-                  <option key={tag.id} value={tag.id}>{tag.name}</option>
-                ))}
-              </select>
+            <div className="md:col-span-2">
+              <label className="mb-1.5 block text-sm font-medium">Tags</label>
+              <TagMultiSelect
+                tags={tags}
+                value={form.tags || []}
+                onChange={handleTagsChange}
+              />
+              <p className="mt-1.5 text-xs text-muted-foreground">
+                Select existing tags, type to search, or add your own custom tags.
+              </p>
             </div>
 
             <div className={isRecurring && mode === 'create' ? 'hidden' : ''}>

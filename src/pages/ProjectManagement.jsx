@@ -10,6 +10,7 @@ import SectionLoader from '@/components/SectionLoader';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import FormSelect from '@/components/ui/FormSelect';
 import { Switch } from '@/components/ui/switch';
 import {
   Dialog,
@@ -839,29 +840,32 @@ export default function ProjectManagement() {
             </div>
             <div>
               <label className="mb-1.5 block text-sm font-medium">Client</label>
-              <select
-                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
+              <FormSelect
                 value={projectForm.client_id}
-                onChange={(event) => setProjectForm((current) => ({ ...current, client_id: event.target.value }))}
-              >
-                <option value="">No client</option>
-                {clients.filter((client) => client.is_active).map((client) => (
-                  <option key={client.id} value={client.id}>{client.name}</option>
-                ))}
-              </select>
+                onValueChange={(clientId) => setProjectForm((current) => ({ ...current, client_id: clientId }))}
+                placeholder="No client"
+                options={[
+                  { value: '', label: 'No client' },
+                  ...clients
+                    .filter((client) => client.is_active)
+                    .map((client) => ({ value: client.id, label: client.name })),
+                ]}
+              />
             </div>
             <div>
               <label className="mb-1.5 block text-sm font-medium">Department</label>
-              <select
-                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
+              <FormSelect
                 value={projectForm.department_id}
-                onChange={(event) => setProjectForm((current) => ({ ...current, department_id: event.target.value }))}
-              >
-                <option value="">Shared / All departments</option>
-                {departments.map((department) => (
-                  <option key={department.id} value={department.id}>{department.name}</option>
-                ))}
-              </select>
+                onValueChange={(departmentId) => setProjectForm((current) => ({ ...current, department_id: departmentId }))}
+                placeholder="Shared / All departments"
+                options={[
+                  { value: '', label: 'Shared / All departments' },
+                  ...departments.map((department) => ({
+                    value: department.id,
+                    label: department.name,
+                  })),
+                ]}
+              />
             </div>
             <div>
               <label className="mb-1.5 block text-sm font-medium">Color</label>

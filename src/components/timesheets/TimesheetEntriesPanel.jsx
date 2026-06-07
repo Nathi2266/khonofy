@@ -1,4 +1,5 @@
 import { Badge } from '@/components/ui/badge';
+import EntryTagBadges from '@/components/calendar/EntryTagBadges';
 
 function formatTimeRange(entry) {
   if (entry.start_at && entry.end_at) {
@@ -107,14 +108,7 @@ export default function TimesheetEntriesPanel({ entries = [], compact = false })
                 Client: {entry.client_name}
               </Badge>
             ) : null}
-            {entry.tag_name ? (
-              <span
-                className="inline-flex items-center rounded-md px-2.5 py-0.5 text-xs font-semibold text-white"
-                style={{ backgroundColor: entry.tag_color || '#6366f1' }}
-              >
-                Tag: {entry.tag_name}
-              </span>
-            ) : null}
+            <EntryTagBadges entry={entry} prefix="Tag: " />
           </div>
 
           {entry.description ? (

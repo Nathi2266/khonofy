@@ -1,7 +1,7 @@
 export const UI_SCALE_STORAGE_KEY = 'khonofy_ui_scale';
 export const UI_SCALE_CHANGE_EVENT = 'khonofy:ui-scale-change';
 
-export const DEFAULT_UI_SCALE = 0.6;
+export const DEFAULT_UI_SCALE = 0.85;
 export const MIN_UI_SCALE = 0.6;
 export const MAX_UI_SCALE = 1;
 export const UI_SCALE_STEP = 0.05;
