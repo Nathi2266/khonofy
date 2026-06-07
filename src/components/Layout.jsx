@@ -53,23 +53,32 @@ function getNavItems(role) {
   return STAFF_NAV;
 }
 
-function SidebarNavIcon({ item, className = '' }) {
+function SidebarNavIcon({ iconSrc, shouldSpin = false, spinKey, onSpinEnd, className = '' }) {
   return (
     <img
-      src={item.iconSrc}
+      key={spinKey}
+      src={iconSrc}
       alt=""
       aria-hidden="true"
-      className={cn(SIDEBAR_ICON_CLASS, className)}
+      className={cn(
+        SIDEBAR_ICON_CLASS,
+        'transition-transform duration-200 ease-out group-hover:scale-110 group-hover:-rotate-3',
+        shouldSpin && 'animate-sidebar-icon-spin-once',
+        className,
+      )}
+      onAnimationEnd={() => {
+        if (shouldSpin) onSpinEnd?.();
+      }}
     />
   );
 }
 
 function navLinkClass(active) {
   return cn(
-    'flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-150',
+    'group flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 ease-out',
     active
-      ? 'bg-primary text-white shadow-sm'
-      : 'text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
+      ? 'bg-primary text-white shadow-sm hover:shadow-md hover:brightness-105'
+      : 'text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground hover:translate-x-1 hover:shadow-md',
   );
 }
 
@@ -79,6 +88,7 @@ export default function Layout() {
   const role = user?.role || 'staff';
   const navItems = getNavItems(role);
   const [showLogoutDialog, setShowLogoutDialog] = useState(false);
+  const [iconSpin, setIconSpin] = useState({ path: '', token: 0 });
   const isAdmin = role === 'admin';
   const onTimesheetReview = location.pathname === '/timesheets/review';
 
@@ -96,6 +106,14 @@ export default function Layout() {
 
   const showTimesheetReviewBadge = isAdmin && !onTimesheetReview && timesheetReviewCount > 0;
 
+  const triggerIconSpin = (path) => {
+    setIconSpin({ path, token: Date.now() });
+  };
+
+  const clearIconSpin = () => {
+    setIconSpin({ path: '', token: 0 });
+  };
+
   return (
     <div className="flex h-app bg-background overflow-hidden">
       <aside className="w-64 flex flex-col flex-shrink-0 border-r border-sidebar-border bg-sidebar">
@@ -110,8 +128,18 @@ export default function Layout() {
           {navItems.map((item) => {
             const active = location.pathname === item.path;
             return (
-              <Link key={item.path} to={item.path} className={navLinkClass(active)}>
-                <SidebarNavIcon item={item} />
+              <Link
+                key={item.path}
+                to={item.path}
+                className={navLinkClass(active)}
+                onClick={() => triggerIconSpin(item.path)}
+              >
+                <SidebarNavIcon
+                  iconSrc={item.iconSrc}
+                  shouldSpin={iconSpin.path === item.path}
+                  spinKey={iconSpin.path === item.path ? iconSpin.token : item.path}
+                  onSpinEnd={clearIconSpin}
+                />
                 <span className="flex-1 text-sm font-bold">{item.label}</span>
                 {item.path === '/timesheets/review' && showTimesheetReviewBadge ? (
                   <span className="rounded-full bg-red-500 px-2 py-0.5 text-xs font-bold text-white">
@@ -127,12 +155,13 @@ export default function Layout() {
           <Link
             to="/profile"
             className={navLinkClass(location.pathname === '/profile')}
+            onClick={() => triggerIconSpin('/profile')}
           >
-            <img
-              src={sidebarIcon8}
-              alt=""
-              aria-hidden="true"
-              className={SIDEBAR_ICON_CLASS}
+            <SidebarNavIcon
+              iconSrc={sidebarIcon8}
+              shouldSpin={iconSpin.path === '/profile'}
+              spinKey={iconSpin.path === '/profile' ? iconSpin.token : '/profile'}
+              onSpinEnd={clearIconSpin}
             />
             <span className="text-sm font-bold">Profile</span>
           </Link>
@@ -141,14 +170,17 @@ export default function Layout() {
         <div className="border-t border-sidebar-border p-3 flex-shrink-0">
           <button
             onClick={() => setShowLogoutDialog(true)}
-            className="w-full flex items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-sm font-bold text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors"
+            className="group w-full flex items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-sm font-bold text-sidebar-foreground transition-all duration-200 ease-out hover:bg-sidebar-accent hover:text-sidebar-accent-foreground hover:translate-x-1 hover:shadow-md"
             aria-label="Log out"
           >
             <img
               src={sidebarIcon9}
               alt=""
               aria-hidden="true"
-              className={SIDEBAR_ICON_CLASS}
+              className={cn(
+                SIDEBAR_ICON_CLASS,
+                'transition-transform duration-200 ease-out group-hover:scale-110 group-hover:-rotate-3',
+              )}
             />
             Logout
           </button>

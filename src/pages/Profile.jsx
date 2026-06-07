@@ -31,11 +31,10 @@ import {
 } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
-  Camera,
   Check,
-  ImageIcon,
   Mail,
   Phone,
+  Pencil,
   Save,
   Upload,
   Monitor,
@@ -131,7 +130,7 @@ function getProfileImageUrl(user, imageKitConfig) {
     return buildSrc({
       urlEndpoint: imageKitConfig.urlEndpoint,
       src: user.profile_image_path,
-      transformation: [{ height: 320, width: 320 }],
+      transformation: [{ height: 512, width: 512 }],
     });
   }
   return user.profile_image_url || '';
@@ -326,7 +325,7 @@ export default function Profile() {
       const auth = imageKitConfig || (await base44.media.imagekitAuth());
       if (!imageKitConfig) setImageKitConfig(auth);
       if (!auth?.publicKey || !auth?.signature || !auth?.token || !auth?.expire || !auth?.urlEndpoint) {
-        throw new Error('ImageKit is not configured on the server');
+        throw new Error('Photo upload is not available right now. Please try again later.');
       }
 
       const croppedBlob = await cropImage(cropSource, croppedAreaPixels);
@@ -380,103 +379,39 @@ export default function Profile() {
         description="Manage your account information, preferences, and profile photo."
       />
 
-      <div className="grid grid-cols-1 xl:grid-cols-[340px_1fr] gap-6 items-start">
-        <div className="space-y-6">
-          <div className="bg-card rounded-xl border border-border p-6">
-            <div className="flex items-center gap-5">
-              <div className="relative flex-shrink-0">
-                <Avatar className="h-24 w-24 rounded-2xl border border-border">
-                  <AvatarImage src={profileImageUrl} alt={user?.full_name || 'Profile photo'} />
-                  <AvatarFallback className="rounded-2xl bg-primary/15 text-primary font-bold text-2xl">
-                    {initials}
-                  </AvatarFallback>
-                </Avatar>
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="absolute -bottom-2 left-1/2 inline-flex -translate-x-1/2 items-center gap-1.5 rounded-full border border-border bg-background px-3 py-1 text-[11px] font-semibold text-foreground shadow-sm transition hover:bg-accent"
-                >
-                  <Camera className="h-3.5 w-3.5" />
-                  Change photo
-                </button>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={handleImageSelection}
+      <div className="w-full space-y-6">
+        <div className="bg-card rounded-xl border border-border px-6 py-10 sm:px-10">
+          <div className="flex flex-col items-center text-center">
+            <label className="group relative mb-5 mx-auto block w-fit cursor-pointer">
+              <Avatar className="h-44 w-44 border-2 border-border shadow-sm transition-all duration-300 ease-out group-hover:scale-[1.04] group-hover:border-primary/50 group-hover:shadow-lg group-hover:ring-4 group-hover:ring-primary/15 sm:h-52 sm:w-52">
+                <AvatarImage
+                  src={profileImageUrl}
+                  alt={user?.full_name || 'Profile photo'}
+                  className="object-cover transition-transform duration-300 ease-out group-hover:scale-105"
                 />
-              </div>
-
-              <div className="min-w-0">
-                <h2 className="text-xl font-bold text-foreground truncate">{user?.full_name || 'User'}</h2>
-                <p className="text-muted-foreground text-sm truncate">{user?.email}</p>
-                <span className={`inline-flex mt-2 items-center gap-1.5 text-xs font-semibold px-3 py-1 rounded-full border ${ROLE_COLORS[user?.role] || ROLE_COLORS.staff}`}>
-                  <DashboardIcon src={dashboardIcon12} className={DASHBOARD_ICON_SIZES.section} />
-                  {ROLE_LABELS[user?.role] || 'Staff'}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-card rounded-xl border border-border p-5">
-            <h3 className="font-semibold text-foreground mb-1 flex items-center gap-2">
-              <Monitor className="h-4 w-4 text-muted-foreground" />
-              Display Settings
-            </h3>
-            <p className="text-xs text-muted-foreground mb-4">
-              Adjust how large the app appears in your browser. Your choice is saved on this device.
-            </p>
-
-            <div className="space-y-3">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">Interface size</span>
-                <span className="font-semibold text-foreground">{formatUiScalePercent(uiScale)}</span>
-              </div>
-
-              <Slider
-                value={[Math.round(uiScale * 100)]}
-                min={Math.round(minScale * 100)}
-                max={Math.round(maxScale * 100)}
-                step={5}
-                onValueChange={(value) => setUiScale(value[0] / 100)}
-                aria-label="Interface size"
+                <AvatarFallback className="bg-primary/15 text-primary font-bold text-5xl transition-colors duration-300 group-hover:bg-primary/25 sm:text-6xl">
+                  {initials}
+                </AvatarFallback>
+              </Avatar>
+              <div className="pointer-events-none absolute inset-0 rounded-full bg-black/0 transition-colors duration-300 group-hover:bg-black/10" />
+              <span className="pointer-events-none absolute bottom-1 right-1 inline-flex h-10 w-10 items-center justify-center rounded-full border border-border bg-background text-foreground shadow-md transition-all duration-300 ease-out group-hover:scale-110 group-hover:border-primary group-hover:bg-primary group-hover:text-primary-foreground group-hover:shadow-lg">
+                <Pencil className="h-4 w-4 transition-transform duration-300 group-hover:rotate-12" />
+              </span>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                className="sr-only"
+                onChange={handleImageSelection}
               />
+            </label>
 
-              <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-                <span>{formatUiScalePercent(minScale)}</span>
-                <span>Default {formatUiScalePercent(defaultScale)}</span>
-                <span>{formatUiScalePercent(maxScale)}</span>
-              </div>
-
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="w-full gap-2"
-                onClick={resetUiScale}
-                disabled={uiScale === defaultScale}
-              >
-                <RotateCcw className="h-3.5 w-3.5" />
-                Reset to default ({formatUiScalePercent(defaultScale)})
-              </Button>
-            </div>
-          </div>
-
-          <div className="bg-card rounded-xl border border-border p-5">
-            <h3 className="font-semibold text-foreground mb-4">Account Info</h3>
-            <div className="grid grid-cols-2 gap-4 text-sm">
-              <div>
-                <p className="text-muted-foreground">Member since</p>
-                <p className="font-medium text-foreground mt-0.5">
-                  {user?.created_date ? new Date(user.created_date).toLocaleDateString('en-US', { year: 'numeric', month: 'long' }) : '—'}
-                </p>
-              </div>
-              <div>
-                <p className="text-muted-foreground">User ID</p>
-                <p className="font-medium text-foreground font-mono text-xs mt-0.5">{user?.id?.slice(0, 12)}...</p>
-              </div>
-            </div>
+            <h2 className="text-2xl font-bold text-foreground truncate max-w-full">{user?.full_name || 'User'}</h2>
+            <p className="text-muted-foreground text-sm truncate max-w-full mt-1">{user?.email}</p>
+            <span className={`inline-flex mt-3 items-center gap-1.5 text-xs font-semibold px-3 py-1 rounded-full border ${ROLE_COLORS[user?.role] || ROLE_COLORS.staff}`}>
+              <DashboardIcon src={dashboardIcon12} className={DASHBOARD_ICON_SIZES.section} />
+              {ROLE_LABELS[user?.role] || 'Staff'}
+            </span>
           </div>
         </div>
 
@@ -587,7 +522,7 @@ export default function Profile() {
             </div>
           </div>
 
-          <div className="flex items-center justify-center gap-3">
+          <div className="flex flex-wrap items-center justify-center gap-3 pt-1">
             <Button
               onClick={() => saveMutation.mutate()}
               disabled={saveMutation.isPending || saved}
@@ -608,19 +543,79 @@ export default function Profile() {
             ) : null}
           </div>
         </div>
+
+        <div className="bg-card rounded-xl border border-border p-5">
+          <h3 className="font-semibold text-foreground mb-1 flex items-center gap-2">
+            <Monitor className="h-4 w-4 text-muted-foreground" />
+            Display Settings
+          </h3>
+          <p className="text-xs text-muted-foreground mb-4">
+            Adjust how large the app appears in your browser. Your choice is saved on this device.
+          </p>
+
+          <div className="space-y-3">
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-muted-foreground">Interface size</span>
+              <span className="font-semibold text-foreground">{formatUiScalePercent(uiScale)}</span>
+            </div>
+
+            <Slider
+              value={[Math.round(uiScale * 100)]}
+              min={Math.round(minScale * 100)}
+              max={Math.round(maxScale * 100)}
+              step={5}
+              onValueChange={(value) => setUiScale(value[0] / 100)}
+              aria-label="Interface size"
+            />
+
+            <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+              <span>{formatUiScalePercent(minScale)}</span>
+              <span>Default {formatUiScalePercent(defaultScale)}</span>
+              <span>{formatUiScalePercent(maxScale)}</span>
+            </div>
+
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="w-full gap-2"
+              onClick={resetUiScale}
+              disabled={uiScale === defaultScale}
+            >
+              <RotateCcw className="h-3.5 w-3.5" />
+              Reset to default ({formatUiScalePercent(defaultScale)})
+            </Button>
+          </div>
+        </div>
+
+        <div className="bg-card rounded-xl border border-border p-5">
+          <h3 className="font-semibold text-foreground mb-4">Account Info</h3>
+          <div className="grid grid-cols-2 gap-4 text-sm">
+            <div>
+              <p className="text-muted-foreground">Member since</p>
+              <p className="font-medium text-foreground mt-0.5">
+                {user?.created_date ? new Date(user.created_date).toLocaleDateString('en-US', { year: 'numeric', month: 'long' }) : '—'}
+              </p>
+            </div>
+            <div>
+              <p className="text-muted-foreground">User ID</p>
+              <p className="font-medium text-foreground font-mono text-xs mt-0.5">{user?.id?.slice(0, 12)}...</p>
+            </div>
+          </div>
+        </div>
       </div>
 
       <Dialog open={cropDialogOpen} onOpenChange={(open) => (!open ? resetCropDialog() : setCropDialogOpen(true))}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-xl">
           <DialogHeader>
             <DialogTitle>Crop profile photo</DialogTitle>
             <DialogDescription>
-              Drag the image to frame it, adjust the zoom, then upload the cropped version.
+              Move and zoom your photo until your face is centered in the circle, then save.
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4">
-            <div className="relative h-[420px] overflow-hidden rounded-xl bg-muted">
+            <div className="relative mx-auto aspect-square w-full max-w-[420px] overflow-hidden rounded-full border border-border bg-muted">
               {cropSource ? (
                 <Cropper
                   image={cropSource}
@@ -653,15 +648,9 @@ export default function Profile() {
               />
             </div>
 
-            <div className="rounded-lg border border-dashed border-border bg-muted/40 p-4 text-sm text-muted-foreground">
-              <div className="flex items-center gap-2 text-foreground font-medium">
-                <ImageIcon className="h-4 w-4" />
-                ImageKit upload preview
-              </div>
-              <p className="mt-1 text-xs leading-5">
-                The selected image is cropped locally first, then uploaded to ImageKit using signed server auth.
-              </p>
-            </div>
+            <p className="text-center text-xs text-muted-foreground leading-5">
+              Your photo is cropped on this device before it is saved to your profile.
+            </p>
           </div>
 
           {uploadError ? (

@@ -89,12 +89,17 @@ module.exports = {
   				from: { transform: 'rotate(0deg)' },
   				to: { transform: 'rotate(-360deg)' },
   			},
+  			'sidebar-icon-spin-once': {
+  				from: { transform: 'rotate(0deg)' },
+  				to: { transform: 'rotate(360deg)' },
+  			},
   		},
   		animation: {
   			'accordion-down': 'accordion-down 0.2s ease-out',
   			'accordion-up': 'accordion-up 0.2s ease-out',
   			'disc-spin-cw': 'disc-spin-cw 1.8s linear infinite',
   			'disc-spin-ccw': 'disc-spin-ccw 1.8s linear infinite',
+  			'sidebar-icon-spin-once': 'sidebar-icon-spin-once 0.45s ease-in-out 1',
   		},
   		height: {
   			app: 'calc(100vh / var(--ui-scale, 1))',
