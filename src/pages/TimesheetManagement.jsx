@@ -16,7 +16,12 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Clock, Send, ChevronDown, CheckCircle2, XCircle, AlertCircle, Undo2, Info, RotateCcw } from 'lucide-react';
+import DashboardIcon, { DASHBOARD_ICON_SIZES } from '@/components/DashboardIcon';
+import { TIMESHEET_STATUS_ICONS } from '@/constants/dashboardIcons';
+import dashboardIcon5 from '@/assets/images/dashboard/5.png';
+import dashboardIcon10 from '@/assets/images/dashboard/10.png';
+import dashboardIcon18 from '@/assets/images/dashboard/18.png';
+import { Send, ChevronDown, Undo2, RotateCcw } from 'lucide-react';
 import { toast } from '@/components/ui/use-toast';
 
 const REVOKE_WINDOW_MS = 24 * 60 * 60 * 1000;
@@ -64,11 +69,11 @@ function invalidateTimesheetQueries(queryClient) {
 }
 
 const STATUS_CONFIG = {
-  draft: { label: 'Draft', color: 'bg-slate-100 text-slate-600', icon: Clock },
-  pending: { label: 'Pending Review', color: 'bg-amber-100 text-amber-700', icon: AlertCircle },
-  approved: { label: 'Approved', color: 'bg-emerald-100 text-emerald-700', icon: CheckCircle2 },
-  rejected: { label: 'Rejected', color: 'bg-red-100 text-red-600', icon: XCircle },
-  revoke_pending: { label: 'Revoke Pending', color: 'bg-purple-100 text-purple-700', icon: RotateCcw },
+  draft: { label: 'Draft', color: 'bg-slate-100 text-slate-600', iconSrc: TIMESHEET_STATUS_ICONS.draft },
+  pending: { label: 'Pending Review', color: 'bg-amber-100 text-amber-700', iconSrc: TIMESHEET_STATUS_ICONS.pending },
+  approved: { label: 'Approved', color: 'bg-emerald-100 text-emerald-700', iconSrc: TIMESHEET_STATUS_ICONS.approved },
+  rejected: { label: 'Rejected', color: 'bg-red-100 text-red-600', iconSrc: TIMESHEET_STATUS_ICONS.rejected },
+  revoke_pending: { label: 'Revoke Pending', color: 'bg-purple-100 text-purple-700', useLucide: RotateCcw },
 };
 
 export default function TimesheetManagement() {
@@ -218,7 +223,7 @@ export default function TimesheetManagement() {
 
       {!hasAssignedAdmin ? (
         <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4">
-          <Info className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
+          <DashboardIcon src={dashboardIcon18} className={`mt-0.5 shrink-0 ${DASHBOARD_ICON_SIZES.section}`} />
           <div>
             <p className="text-sm font-semibold text-amber-900">No admin assigned yet</p>
             <p className="mt-1 text-xs text-amber-800">
@@ -256,6 +261,7 @@ export default function TimesheetManagement() {
             </div>
 
             <div className="flex items-center gap-3">
+              <DashboardIcon src={dashboardIcon5} className={DASHBOARD_ICON_SIZES.section} />
               <div className="text-right">
                 <p className="text-2xl font-bold text-primary">{totalHours.toFixed(1)}h</p>
                 <p className="text-xs text-muted-foreground">this week</p>
@@ -456,7 +462,10 @@ export default function TimesheetManagement() {
               </div>
             ))}
             {timesheets.length === 0 ? (
-              <p className="py-6 text-center text-sm text-muted-foreground">No timesheets submitted yet.</p>
+              <div className="py-8 text-center">
+                <DashboardIcon src={dashboardIcon10} className={`mx-auto mb-3 opacity-60 ${DASHBOARD_ICON_SIZES.hero}`} />
+                <p className="text-sm text-muted-foreground">No timesheets submitted yet.</p>
+              </div>
             ) : null}
           </div>
         </div>
@@ -512,10 +521,14 @@ export default function TimesheetManagement() {
 
 function StatusBadge({ status }) {
   const config = STATUS_CONFIG[status] || STATUS_CONFIG.draft;
-  const Icon = config.icon;
+  const LucideIcon = config.useLucide;
   return (
     <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${config.color}`}>
-      <Icon className="h-3 w-3" />
+      {config.iconSrc ? (
+        <DashboardIcon src={config.iconSrc} className={DASHBOARD_ICON_SIZES.inline} />
+      ) : LucideIcon ? (
+        <LucideIcon className="h-3 w-3" />
+      ) : null}
       {config.label}
     </span>
   );

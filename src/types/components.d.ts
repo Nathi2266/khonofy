@@ -15,6 +15,8 @@ declare module "@/components/PageHeader" {
     description?: ReactNode;
     actions?: ReactNode;
     icon?: ComponentType<{ className?: string }>;
+    iconSrc?: string;
+    iconClassName?: string;
     className?: string;
   }
 

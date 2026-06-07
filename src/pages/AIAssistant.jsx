@@ -1,43 +1,50 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
-import { Bot, CalendarDays, CheckSquare, Copy, FilePlus2, FileText, MessageSquareText, Send, Sparkles, Trash2, Wand2 } from 'lucide-react';
+import { Copy, MessageSquareText, Send, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from '@/components/ui/use-toast';
 import PageHeader from '@/components/PageHeader';
 import PageShell from '@/components/PageShell';
+import DashboardIcon, { DASHBOARD_ICON_SIZES } from '@/components/DashboardIcon';
+import aiAvatar from '@/assets/images/Ai_Avatar.gif';
+import dashboardIcon2 from '@/assets/images/dashboard/2.png';
+import dashboardIcon4 from '@/assets/images/dashboard/4.png';
+import dashboardIcon10 from '@/assets/images/dashboard/10.png';
+import dashboardIcon11 from '@/assets/images/dashboard/11.png';
+import dashboardIcon16 from '@/assets/images/dashboard/16.png';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 
 const QUICK_ACTIONS = [
   {
     title: 'Create a project plan',
     description: 'Generate milestones, owners, and delivery steps.',
-    icon: Wand2,
+    iconSrc: dashboardIcon2,
     prompt: 'Create a project plan for a new internal rollout with milestones, risks, and next actions.',
   },
   {
     title: 'Draft a task checklist',
     description: 'Break big work into smaller executable steps.',
-    icon: CheckSquare,
+    iconSrc: dashboardIcon4,
     prompt: 'Turn a large task into a practical checklist with dependencies and acceptance criteria.',
   },
   {
     title: 'Write a timesheet summary',
     description: 'Prepare a clean weekly or daily work summary.',
-    icon: CalendarDays,
+    iconSrc: dashboardIcon10,
     prompt: 'Write a concise weekly timesheet summary that I can adapt before submission.',
   },
   {
     title: 'Prepare a report outline',
     description: 'Structure updates, reports, and leadership summaries.',
-    icon: FileText,
+    iconSrc: dashboardIcon11,
     prompt: 'Create a management report outline with sections for progress, blockers, risks, and next steps.',
   },
   {
     title: 'Create a ticket draft',
     description: 'Prepare a task ticket that can be logged into Khonofy.',
-    icon: FilePlus2,
+    iconSrc: dashboardIcon4,
     prompt: 'Help me create a ticket. Gather the ticket name, what needs to be done, and the timeframe before marking it ready to log.',
   },
 ];
@@ -221,8 +228,8 @@ export default function AIAssistant() {
       <div className="flex min-h-[78vh] flex-col overflow-hidden rounded-xl border border-border bg-card">
         <div className="border-b border-border px-5 py-4">
           <div className="flex items-center gap-3">
-            <div className="rounded-xl bg-primary/10 p-2 text-primary">
-              <Bot className="h-5 w-5" />
+            <div className="rounded-xl bg-primary/10 p-2">
+              <img src={aiAvatar} alt="" className="h-8 w-8 rounded-lg object-cover" />
             </div>
             <div>
               <h2 className="font-semibold text-foreground">Conversation</h2>
@@ -233,13 +240,11 @@ export default function AIAssistant() {
 
         <div className="border-b border-border bg-muted/20 px-5 py-4">
           <div className="mb-3 flex items-center gap-2">
-            <Sparkles className="h-4 w-4 text-primary" />
+            <DashboardIcon src={dashboardIcon16} className={DASHBOARD_ICON_SIZES.section} />
             <h3 className="text-sm font-semibold text-foreground">Quick starts</h3>
           </div>
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5">
-            {QUICK_ACTIONS.map((action) => {
-              const Icon = action.icon;
-              return (
+            {QUICK_ACTIONS.map((action) => (
                 <button
                   key={action.title}
                   type="button"
@@ -247,14 +252,13 @@ export default function AIAssistant() {
                   onClick={() => submitPrompt(action.prompt)}
                   disabled={isResponding}
                 >
-                  <div className="mb-2 inline-flex rounded-lg bg-primary/10 p-2 text-primary">
-                    <Icon className="h-4 w-4" />
+                  <div className="mb-2 inline-flex rounded-lg bg-primary/10 p-2">
+                    <DashboardIcon src={action.iconSrc} className={DASHBOARD_ICON_SIZES.section} />
                   </div>
                   <p className="text-sm font-medium text-foreground">{action.title}</p>
                   <p className="mt-1 text-xs text-muted-foreground">{action.description}</p>
                 </button>
-              );
-            })}
+            ))}
           </div>
         </div>
 

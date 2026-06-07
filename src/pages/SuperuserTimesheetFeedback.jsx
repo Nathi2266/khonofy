@@ -7,7 +7,15 @@ import PageShell from '@/components/PageShell';
 import SectionLoader from '@/components/SectionLoader';
 import { Input } from '@/components/ui/input';
 import TimesheetEntriesPanel from '@/components/timesheets/TimesheetEntriesPanel';
-import { Search, ChevronDown, CheckCircle2, XCircle, Clock, AlertCircle, ShieldCheck, Building2 } from 'lucide-react';
+import DashboardIcon, { DASHBOARD_ICON_SIZES } from '@/components/DashboardIcon';
+import dashboardIcon3 from '@/assets/images/dashboard/3.png';
+import dashboardIcon5 from '@/assets/images/dashboard/5.png';
+import dashboardIcon20 from '@/assets/images/dashboard/20.png';
+import dashboardIcon10 from '@/assets/images/dashboard/10.png';
+import dashboardIcon13 from '@/assets/images/dashboard/13.png';
+import dashboardIcon18 from '@/assets/images/dashboard/18.png';
+import dashboardIcon19 from '@/assets/images/dashboard/19.png';
+import { Search, ChevronDown } from 'lucide-react';
 
 const STATUS_TABS = ['pending', 'approved', 'rejected', 'all'];
 
@@ -112,9 +120,9 @@ export default function SuperuserTimesheetFeedback() {
       />
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-        <SummaryCard label="Pending Approval" value={pendingCount} icon={AlertCircle} tone="amber" />
-        <SummaryCard label="Approved" value={approvedCount} icon={CheckCircle2} tone="emerald" />
-        <SummaryCard label="Rejected" value={rejectedCount} icon={XCircle} tone="red" />
+        <SummaryCard label="Pending Approval" value={pendingCount} iconSrc={dashboardIcon3} tone="amber" />
+        <SummaryCard label="Approved" value={approvedCount} iconSrc={dashboardIcon20} tone="emerald" />
+        <SummaryCard label="Rejected" value={rejectedCount} iconSrc={dashboardIcon13} tone="red" />
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
@@ -168,13 +176,13 @@ export default function SuperuserTimesheetFeedback() {
                         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                           <p className="truncate text-sm font-semibold text-foreground">{timesheet.user_name || 'Unknown submitter'}</p>
                           <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-                            <Building2 className="h-3 w-3" />
+                            <DashboardIcon src={dashboardIcon19} className={DASHBOARD_ICON_SIZES.inline} />
                             {departmentName}
                           </span>
                         </div>
                         <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
                           <span className="inline-flex items-center gap-1">
-                            <Clock className="h-3 w-3" />
+                            <DashboardIcon src={dashboardIcon5} className={DASHBOARD_ICON_SIZES.inline} />
                             {Number(timesheet.total_hours || 0).toFixed(1)}h
                           </span>
                           <span>Submitted: {timesheet.submitted_at ? new Date(timesheet.submitted_at).toLocaleString() : 'Not submitted'}</span>
@@ -209,7 +217,7 @@ export default function SuperuserTimesheetFeedback() {
 
         {!filtered.length && !isLoading ? (
           <div className="rounded-xl border border-border bg-card py-12 text-center">
-            <ShieldCheck className="mx-auto mb-3 h-10 w-10 text-primary/60" />
+            <DashboardIcon src={dashboardIcon10} className={`mx-auto mb-3 opacity-60 ${DASHBOARD_ICON_SIZES.hero}`} />
             <p className="font-semibold text-foreground">No timesheet feedback found</p>
             <p className="text-sm text-muted-foreground">Submitted and reviewed timesheets will appear here for superuser oversight.</p>
           </div>
@@ -219,19 +227,11 @@ export default function SuperuserTimesheetFeedback() {
   );
 }
 
-function SummaryCard({ label, value, icon: Icon, tone }) {
-  const colorMap = {
-    amber: 'bg-amber-100 text-amber-700',
-    emerald: 'bg-emerald-100 text-emerald-700',
-    red: 'bg-red-100 text-red-600',
-  };
-
+function SummaryCard({ label, value, iconSrc, tone }) {
   return (
     <div className="rounded-xl border border-border bg-card p-4">
       <div className="flex items-center gap-3">
-        <div className={`rounded-lg p-2 ${colorMap[tone] || colorMap.amber}`}>
-          <Icon className="h-5 w-5" />
-        </div>
+        <DashboardIcon src={iconSrc} className={DASHBOARD_ICON_SIZES.kpi} />
         <div>
           <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
           <p className="text-2xl font-bold text-foreground">{value}</p>
@@ -242,12 +242,16 @@ function SummaryCard({ label, value, icon: Icon, tone }) {
 }
 
 function StatusBadge({ status }) {
+  const statusIcons = {
+    pending: dashboardIcon18,
+    approved: dashboardIcon20,
+    rejected: dashboardIcon13,
+    draft: dashboardIcon10,
+  };
+
   return (
     <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${STATUS_STYLES[status] || STATUS_STYLES.draft}`}>
-      {status === 'pending' ? <AlertCircle className="h-3 w-3" /> : null}
-      {status === 'approved' ? <CheckCircle2 className="h-3 w-3" /> : null}
-      {status === 'rejected' ? <XCircle className="h-3 w-3" /> : null}
-      {status === 'draft' ? <Clock className="h-3 w-3" /> : null}
+      {statusIcons[status] ? <DashboardIcon src={statusIcons[status]} className={DASHBOARD_ICON_SIZES.inline} /> : null}
       {status === 'pending' ? 'Pending Review' : status}
     </span>
   );

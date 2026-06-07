@@ -2,7 +2,10 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { Input } from '@/components/ui/input';
-import { Search, Activity, Filter } from 'lucide-react';
+import { Search, Filter } from 'lucide-react';
+import DashboardIcon, { DASHBOARD_ICON_SIZES } from '@/components/DashboardIcon';
+import dashboardIcon17 from '@/assets/images/dashboard/17.png';
+import dashboardIcon20 from '@/assets/images/dashboard/20.png';
 import PageHeader from '@/components/PageHeader';
 import PageShell from '@/components/PageShell';
 import SectionLoader from '@/components/SectionLoader';
@@ -23,6 +26,11 @@ function getActionColor(action) {
     if (action?.includes(key)) return val;
   }
   return 'bg-slate-100 text-slate-600';
+}
+
+function getActionIcon(action) {
+  if (action?.toLowerCase().includes('approv')) return dashboardIcon20;
+  return dashboardIcon17;
 }
 
 export default function AuditTrail() {
@@ -50,7 +58,6 @@ export default function AuditTrail() {
       <PageHeader
         title="Audit Trail"
         description="Complete log of all user actions across the organization."
-        icon={Activity}
       />
 
       <div className="flex flex-wrap items-center gap-3">
@@ -96,11 +103,14 @@ export default function AuditTrail() {
               <span className="font-mono text-xs text-muted-foreground">
                 {new Date(log.created_date).toLocaleString()}
               </span>
-              <div className="min-w-0">
+              <div className="flex min-w-0 items-start gap-2">
+                <DashboardIcon src={getActionIcon(log.action)} className={`mt-0.5 ${DASHBOARD_ICON_SIZES.inline}`} />
+                <div className="min-w-0">
                 <p className="font-medium leading-tight text-foreground">{log.user_name || 'Unknown'}</p>
                 {log.department_id ? (
                   <p className="mt-0.5 text-xs text-muted-foreground">{log.department_id}</p>
                 ) : null}
+                </div>
               </div>
               <span className={`w-fit rounded-full px-2 py-0.5 text-xs font-medium ${getActionColor(log.action)}`}>
                 {log.action}
@@ -116,7 +126,7 @@ export default function AuditTrail() {
           ))}
           {filtered.length === 0 && !isLoading ? (
             <div className="py-12 text-center">
-              <Activity className="mx-auto mb-3 h-10 w-10 text-muted-foreground/30" />
+              <DashboardIcon src={dashboardIcon17} className={`mx-auto mb-3 opacity-40 ${DASHBOARD_ICON_SIZES.hero}`} />
               <p className="font-medium text-foreground">No activity found</p>
               <p className="text-sm text-muted-foreground">Activity will appear here as users interact with the system.</p>
             </div>

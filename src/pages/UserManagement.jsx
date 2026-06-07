@@ -34,7 +34,11 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { Checkbox } from '@/components/ui/checkbox';
-import { BadgeCheck, Users, Plus, UserCog, Shield, Crown, Search, ChevronDown, Upload, FileText, Sparkles, Eye, EyeOff, Pencil, Trash2, Info } from 'lucide-react';
+import DashboardIcon, { DASHBOARD_ICON_SIZES } from '@/components/DashboardIcon';
+import dashboardIcon1 from '@/assets/images/dashboard/1.png';
+import dashboardIcon11 from '@/assets/images/dashboard/11.png';
+import dashboardIcon12 from '@/assets/images/dashboard/12.png';
+import { Plus, UserCog, Search, ChevronDown, Upload, Sparkles, Eye, EyeOff, Pencil, Trash2, Info } from 'lucide-react';
 
 /**
  * @typedef {Object} CreateUserPayload
@@ -273,12 +277,12 @@ function TablePagination({ page, totalPages, totalItems, onPageChange }) {
   );
 }
 
-function UserTableSection({ title, description, icon: Icon, search, children }) {
+function UserTableSection({ title, description, iconSrc, search, children }) {
   return (
     <div className="bg-card rounded-xl border border-border overflow-hidden">
       <div className="px-4 py-3 border-b border-border bg-muted/30 flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
         <div className="flex items-center gap-2 min-w-0">
-          <Icon className="w-4 h-4 text-primary flex-shrink-0" />
+          <DashboardIcon src={iconSrc} className={DASHBOARD_ICON_SIZES.section} />
           <div className="min-w-0">
             <p className="text-sm font-semibold text-foreground">{title}</p>
             <p className="text-xs text-muted-foreground">{description}</p>
@@ -1022,7 +1026,6 @@ export default function UserManagement() {
       <PageHeader
         title="User Management"
         description="Create super users, admins, and staff. Assign staff to admins who will manage their work."
-        icon={Users}
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <Button variant="outline" onClick={openImport} className="gap-2">
@@ -1070,7 +1073,7 @@ export default function UserManagement() {
         <UserTableSection
           title="Super Users"
           description="Click a super user to expand and edit their role, department, and designation."
-          icon={Crown}
+          iconSrc={dashboardIcon12}
           search={
             <TableSearch
               value={superuserSearch}
@@ -1144,7 +1147,7 @@ export default function UserManagement() {
             })}
             {superuserUsers.length === 0 && !isLoading && (
               <div className="text-center py-10">
-                <Crown className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
+                <DashboardIcon src={dashboardIcon12} className={`mx-auto mb-3 opacity-40 ${DASHBOARD_ICON_SIZES.hero}`} />
                 <p className="font-medium text-foreground">No super users yet</p>
                 <p className="text-muted-foreground text-sm">Create a super user to manage the system.</p>
               </div>
@@ -1171,7 +1174,7 @@ export default function UserManagement() {
         <UserTableSection
           title="Staff Users"
           description="Click a staff member to expand and edit their role, department, and designation, or use Assign to link them to an admin."
-          icon={Users}
+          iconSrc={dashboardIcon1}
           search={
             <TableSearch
               value={staffSearch}
@@ -1265,7 +1268,7 @@ export default function UserManagement() {
             })}
             {staffUsers.length === 0 && !isLoading && (
               <div className="text-center py-10">
-                <BadgeCheck className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
+                <DashboardIcon src={dashboardIcon1} className={`mx-auto mb-3 opacity-40 ${DASHBOARD_ICON_SIZES.hero}`} />
                 <p className="font-medium text-foreground">No staff users yet</p>
                 <p className="text-muted-foreground text-sm">Create a staff user to get started.</p>
               </div>
@@ -1292,7 +1295,7 @@ export default function UserManagement() {
         <UserTableSection
           title="Admin Users"
           description="Click an admin to expand and edit their role, department, and designation."
-          icon={Shield}
+          iconSrc={dashboardIcon12}
           search={
             <TableSearch
               value={adminSearch}
@@ -1368,7 +1371,7 @@ export default function UserManagement() {
             })}
             {adminUsers.length === 0 && !isLoading && (
               <div className="text-center py-10">
-                <Shield className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
+                <DashboardIcon src={dashboardIcon12} className={`mx-auto mb-3 opacity-40 ${DASHBOARD_ICON_SIZES.hero}`} />
                 <p className="font-medium text-foreground">No admin users yet</p>
                 <p className="text-muted-foreground text-sm">Create an admin user to manage staff.</p>
               </div>
@@ -1444,7 +1447,7 @@ export default function UserManagement() {
               />
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                 <div className="flex items-start gap-3 min-w-0">
-                  <FileText className="w-5 h-5 text-primary flex-shrink-0 mt-0.5" />
+                  <DashboardIcon src={dashboardIcon11} className={`mt-0.5 ${DASHBOARD_ICON_SIZES.section}`} />
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-foreground">Upload document</p>
                     <p className="text-xs text-muted-foreground mt-1">
@@ -1591,7 +1594,7 @@ export default function UserManagement() {
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/45 backdrop-blur-sm px-4">
           <div className="w-full max-w-sm rounded-xl border border-emerald-500/30 bg-card px-6 py-5 text-center shadow-2xl">
             <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500/15">
-              <BadgeCheck className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
+              <DashboardIcon src={dashboardIcon1} className={DASHBOARD_ICON_SIZES.kpi} />
             </div>
             <p className="text-base font-semibold text-foreground">{importSuccessOverlay}</p>
           </div>

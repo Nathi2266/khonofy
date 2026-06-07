@@ -11,6 +11,10 @@ import { formatUiScalePercent } from '@/lib/ui-scale';
 import { logActivity } from '@/utils/activityLogger';
 import { Button } from '@/components/ui/button';
 import PageHeader from '@/components/PageHeader';
+import DashboardIcon, { DASHBOARD_ICON_SIZES } from '@/components/DashboardIcon';
+import dashboardIcon1 from '@/assets/images/dashboard/1.png';
+import dashboardIcon12 from '@/assets/images/dashboard/12.png';
+import dashboardIcon19 from '@/assets/images/dashboard/19.png';
 import DiscLoader from '@/components/DiscLoader';
 import PageLoader from '@/components/PageLoader';
 import PageShell from '@/components/PageShell';
@@ -27,17 +31,13 @@ import {
 } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
-  BadgeCheck,
-  Building2,
   Camera,
   Check,
   ImageIcon,
   Mail,
   Phone,
   Save,
-  Shield,
   Upload,
-  User,
   Monitor,
   RotateCcw,
 } from 'lucide-react';
@@ -378,6 +378,7 @@ export default function Profile() {
       <PageHeader
         title="My Profile"
         description="Manage your account information, preferences, and profile photo."
+        iconSrc={user?.role === 'admin' ? dashboardIcon1 : undefined}
       />
 
       <div className="grid grid-cols-1 xl:grid-cols-[340px_1fr] gap-6 items-start">
@@ -412,7 +413,7 @@ export default function Profile() {
                 <h2 className="text-xl font-bold text-foreground truncate">{user?.full_name || 'User'}</h2>
                 <p className="text-muted-foreground text-sm truncate">{user?.email}</p>
                 <span className={`inline-flex mt-2 items-center gap-1.5 text-xs font-semibold px-3 py-1 rounded-full border ${ROLE_COLORS[user?.role] || ROLE_COLORS.staff}`}>
-                  <Shield className="w-3 h-3" />
+                  <DashboardIcon src={dashboardIcon12} className={DASHBOARD_ICON_SIZES.section} />
                   {ROLE_LABELS[user?.role] || 'Staff'}
                 </span>
               </div>
@@ -485,7 +486,7 @@ export default function Profile() {
           <div className="space-y-5">
             <div>
               <label className="text-sm font-medium text-foreground mb-1.5 flex items-center gap-1.5">
-                <User className="w-4 h-4 text-muted-foreground" /> Full Name
+                <DashboardIcon src={dashboardIcon1} className={DASHBOARD_ICON_SIZES.section} /> Full Name
               </label>
               <Input
                 value={form.full_name}
@@ -530,7 +531,7 @@ export default function Profile() {
 
             <div>
               <label className="text-sm font-medium text-foreground mb-1.5 flex items-center gap-1.5">
-                <Building2 className="w-4 h-4 text-muted-foreground" /> Department
+                <DashboardIcon src={dashboardIcon19} className={DASHBOARD_ICON_SIZES.section} /> Department
               </label>
               <Select
                 value={form.departmentId || '__none__'}
@@ -553,7 +554,7 @@ export default function Profile() {
 
             <div>
               <label className="text-sm font-medium text-foreground mb-1.5 flex items-center gap-1.5">
-                <BadgeCheck className="w-4 h-4 text-muted-foreground" /> Designation
+                <DashboardIcon src={dashboardIcon1} className={DASHBOARD_ICON_SIZES.section} /> Designation
               </label>
               <Select
                 value={form.designationId || '__none__'}
@@ -576,7 +577,7 @@ export default function Profile() {
 
             <div>
               <label className="text-sm font-medium text-foreground mb-1.5 flex items-center gap-1.5">
-                <Shield className="w-4 h-4 text-muted-foreground" /> Role
+                <DashboardIcon src={dashboardIcon12} className={DASHBOARD_ICON_SIZES.section} /> Role
               </label>
               <Input
                 value={ROLE_LABELS[user?.role] || 'Staff'}

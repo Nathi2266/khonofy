@@ -1,4 +1,7 @@
-import { Calendar, Clock, User } from 'lucide-react';
+import { Calendar } from 'lucide-react';
+import DashboardIcon, { DASHBOARD_ICON_SIZES } from '@/components/DashboardIcon';
+import dashboardIcon1 from '@/assets/images/dashboard/1.png';
+import dashboardIcon5 from '@/assets/images/dashboard/5.png';
 
 const PRIORITY_STYLES = {
   low: 'bg-slate-100 text-slate-600',
@@ -44,13 +47,13 @@ export default function TaskCard({ task, onClick, actions }) {
         )}
         {task.assigned_to_name && (
           <span className="text-xs text-muted-foreground flex items-center gap-1">
-            <User className="w-3 h-3" />
+            <DashboardIcon src={dashboardIcon1} className="h-5 w-5" />
             {task.assigned_to_name}
           </span>
         )}
         {task.estimated_hours && (
           <span className="text-xs text-muted-foreground flex items-center gap-1">
-            <Clock className="w-3 h-3" />
+            <DashboardIcon src={dashboardIcon5} className="h-4 w-4" />
             {task.estimated_hours}h est.
           </span>
         )}

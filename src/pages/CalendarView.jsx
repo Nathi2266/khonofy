@@ -9,7 +9,11 @@ import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/use-toast';
 import PageHeader from '@/components/PageHeader';
 import PageShell from '@/components/PageShell';
-import { CalendarDays, ChevronLeft, ChevronRight, Lock, Plus } from 'lucide-react';
+import DashboardIcon, { DASHBOARD_ICON_SIZES } from '@/components/DashboardIcon';
+import dashboardIcon5 from '@/assets/images/dashboard/5.png';
+import dashboardIcon18 from '@/assets/images/dashboard/18.png';
+import dashboardIcon20 from '@/assets/images/dashboard/20.png';
+import { CalendarDays, ChevronLeft, ChevronRight, Plus } from 'lucide-react';
 import CalendarEntryModal from '@/components/calendar/CalendarEntryModal';
 import VoiceTicketDialog from '@/components/calendar/VoiceTicketDialog';
 import { buildCalendarFormFromTicket } from '@/components/calendar/voiceTicketUtils';
@@ -583,7 +587,10 @@ export default function CalendarView() {
 
         {isWeekLocked ? (
           <div className="flex items-start gap-3 rounded-xl border border-slate-300 bg-slate-100 px-4 py-3 text-sm text-slate-700">
-            <Lock className="mt-0.5 h-4 w-4 shrink-0" />
+            <DashboardIcon
+              src={currentWeekTimesheet?.status === 'revoke_pending' ? dashboardIcon18 : dashboardIcon20}
+              className={`mt-0.5 shrink-0 ${DASHBOARD_ICON_SIZES.section}`}
+            />
             <div>
               <p className="font-semibold text-slate-900">This week is locked</p>
               <p className="mt-1 text-xs text-slate-600">
@@ -606,11 +613,14 @@ export default function CalendarView() {
             <Button variant="outline" size="icon" className="h-9 w-9" onClick={() => setWeekOffset((current) => current + 1)}>
               <ChevronRight className="w-4 h-4" />
             </Button>
-            <div className="pl-2">
-              <p className="text-sm font-semibold text-foreground">
-                {format(weekStartDate, 'MMM d')} - {format(addMinutes(weekEndExclusive, -1), 'MMM d, yyyy')}
-              </p>
-              <p className="text-xs text-muted-foreground">Monday to Sunday</p>
+            <div className="flex items-center gap-2 pl-2">
+              <DashboardIcon src={dashboardIcon5} className={DASHBOARD_ICON_SIZES.section} />
+              <div>
+                <p className="text-sm font-semibold text-foreground">
+                  {format(weekStartDate, 'MMM d')} - {format(addMinutes(weekEndExclusive, -1), 'MMM d, yyyy')}
+                </p>
+                <p className="text-xs text-muted-foreground">Monday to Sunday</p>
+              </div>
             </div>
           </div>
           <div className="flex items-center gap-2">

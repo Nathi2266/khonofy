@@ -1,24 +1,33 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { Link } from 'react-router-dom';
 import {
-  Users,
   Building2,
-  Clock,
-  AlertCircle,
   ArrowRight,
   Activity,
   TrendingUp,
   TrendingDown,
   Sparkles,
-  ShieldCheck,
-  FileText,
-  FolderKanban,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import PageHeader from '@/components/PageHeader';
 import PageShell from '@/components/PageShell';
+import DashboardIcon, { DASHBOARD_ICON_SIZES } from '@/components/DashboardIcon';
+import dashboardIcon1 from '@/assets/images/dashboard/1.png';
+import dashboardIcon2 from '@/assets/images/dashboard/2.png';
+import dashboardIcon3 from '@/assets/images/dashboard/3.png';
+import dashboardIcon4 from '@/assets/images/dashboard/4.png';
+import dashboardIcon20 from '@/assets/images/dashboard/20.png';
+import dashboardIcon10 from '@/assets/images/dashboard/10.png';
+import dashboardIcon11 from '@/assets/images/dashboard/11.png';
+import dashboardIcon12 from '@/assets/images/dashboard/12.png';
+import dashboardIcon13 from '@/assets/images/dashboard/13.png';
+import dashboardIcon16 from '@/assets/images/dashboard/16.png';
+import dashboardIcon17 from '@/assets/images/dashboard/17.png';
+import dashboardIcon18 from '@/assets/images/dashboard/18.png';
+import dashboardIcon19 from '@/assets/images/dashboard/19.png';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend
@@ -27,12 +36,36 @@ import {
 const COLORS = ['hsl(238,68%,55%)', 'hsl(173,58%,39%)', 'hsl(43,96%,56%)', 'hsl(0,84%,60%)'];
 
 const KPI_TONES = {
-  primary: { bar: '#2563eb', tint: 'bg-blue-50 text-blue-700 border-blue-100', ring: 'border-blue-200/80' },
-  green: { bar: '#059669', tint: 'bg-emerald-50 text-emerald-700 border-emerald-100', ring: 'border-emerald-200/80' },
-  amber: { bar: '#d97706', tint: 'bg-amber-50 text-amber-700 border-amber-100', ring: 'border-amber-200/80' },
-  red: { bar: '#dc2626', tint: 'bg-red-50 text-red-700 border-red-100', ring: 'border-red-200/80' },
-  purple: { bar: '#7c3aed', tint: 'bg-purple-50 text-purple-700 border-purple-100', ring: 'border-purple-200/80' },
-  slate: { bar: '#475569', tint: 'bg-slate-50 text-slate-700 border-slate-100', ring: 'border-slate-200/80' },
+  primary: {
+    bar: '#2563eb',
+    tint: 'border border-blue-100 bg-blue-50 text-blue-700 dark:border-blue-900/50 dark:bg-blue-950/30 dark:text-blue-300',
+    ring: 'border-blue-200/80 dark:border-blue-900/50',
+  },
+  green: {
+    bar: '#059669',
+    tint: 'border border-emerald-100 bg-emerald-50 text-emerald-700 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-300',
+    ring: 'border-emerald-200/80 dark:border-emerald-900/50',
+  },
+  amber: {
+    bar: '#d97706',
+    tint: 'border border-amber-100 bg-amber-50 text-amber-700 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-300',
+    ring: 'border-amber-200/80 dark:border-amber-900/50',
+  },
+  red: {
+    bar: '#dc2626',
+    tint: 'border border-red-100 bg-red-50 text-red-700 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-300',
+    ring: 'border-red-200/80 dark:border-red-900/50',
+  },
+  purple: {
+    bar: '#7c3aed',
+    tint: 'border border-purple-100 bg-purple-50 text-purple-700 dark:border-purple-900/50 dark:bg-purple-950/30 dark:text-purple-300',
+    ring: 'border-purple-200/80 dark:border-purple-900/50',
+  },
+  slate: {
+    bar: '#475569',
+    tint: 'border border-border bg-muted/40 text-foreground dark:bg-muted/30 dark:text-muted-foreground',
+    ring: 'border-border',
+  },
 };
 
 function getRecordDate(record) {
@@ -115,32 +148,32 @@ function MiniSparkline({ data, tone = 'primary' }) {
   );
 }
 
-function KpiCard({ label, value, icon: Icon, series, tone = 'primary', trend, note, featured = false }) {
+function KpiCard({ label, value, icon: Icon, iconSrc, series, tone = 'primary', trend, note, featured = false }) {
   const theme = KPI_TONES[tone] || KPI_TONES.primary;
   const TrendIcon = trend?.positive ? TrendingUp : TrendingDown;
 
   return (
     <div
-      className={`group rounded-2xl border bg-card/95 p-5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg ${featured ? 'border-border bg-gradient-to-br from-slate-50 via-white to-slate-100 text-foreground dark:border-slate-200/80 dark:from-slate-950 dark:via-slate-900 dark:to-slate-800 dark:text-white' : `border-border ${theme.ring}`}`}
+      className={`group rounded-2xl border border-border bg-card p-5 text-foreground shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg ${featured ? 'bg-gradient-to-br from-card via-background to-muted/30' : theme.ring}`}
     >
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
-          <div className={`inline-flex items-center gap-2 rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide ${featured ? 'border-border bg-background/70 text-muted-foreground dark:border-white/10 dark:bg-white/5 dark:text-slate-200' : theme.tint}`}>
-            {Icon && <Icon className="h-3.5 w-3.5" />}
+          <div className={`inline-flex items-center gap-2 rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide ${featured ? 'border border-border bg-muted/50 text-muted-foreground' : theme.tint}`}>
+            {!iconSrc && Icon ? <Icon className="h-3.5 w-3.5" /> : null}
             {label}
           </div>
-          <p className={`mt-3 text-3xl font-semibold tracking-tight ${featured ? 'text-foreground dark:text-white' : 'text-foreground'}`}>{value ?? '—'}</p>
-          {note ? <p className={`mt-1 text-xs ${featured ? 'text-muted-foreground dark:text-slate-300' : 'text-muted-foreground'}`}>{note}</p> : null}
+          <p className="mt-3 text-3xl font-semibold tracking-tight text-foreground">{value ?? '—'}</p>
+          {note ? <p className="mt-1 text-xs text-muted-foreground">{note}</p> : null}
         </div>
-        <div className={`flex h-11 w-11 items-center justify-center rounded-2xl ${featured ? 'bg-primary/10 text-primary dark:bg-white/10 dark:text-white' : theme.tint}`}>
-          {Icon && <Icon className="h-5 w-5" />}
+        <div className={`flex shrink-0 items-center justify-center overflow-hidden rounded-2xl ${iconSrc ? `${DASHBOARD_ICON_SIZES.kpi} bg-transparent` : 'h-11 w-11'} ${!iconSrc && (featured ? 'bg-primary/10 text-primary' : theme.tint)}`}>
+          {iconSrc ? <DashboardIcon src={iconSrc} className={DASHBOARD_ICON_SIZES.kpi} /> : Icon ? <Icon className="h-5 w-5" /> : null}
         </div>
       </div>
 
       <div className="mt-4 flex items-end justify-between gap-4">
         <MiniSparkline data={series} tone={tone} />
         {trend ? (
-          <div className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-semibold ${featured ? 'border-border bg-background/70 text-foreground dark:border-white/10 dark:bg-white/5 dark:text-white' : trend.positive ? 'border-emerald-100 bg-emerald-50 text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-950/20 dark:text-emerald-300' : 'border-red-100 bg-red-50 text-red-700 dark:border-red-900/40 dark:bg-red-950/20 dark:text-red-300'}`}>
+          <div className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-semibold ${featured ? 'border-border bg-muted/50 text-foreground' : trend.positive ? 'border-emerald-100 bg-emerald-50 text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-950/20 dark:text-emerald-300' : 'border-red-100 bg-red-50 text-red-700 dark:border-red-900/40 dark:bg-red-950/20 dark:text-red-300'}`}>
             <TrendIcon className="h-3.5 w-3.5" />
             {trend.label}
           </div>
@@ -150,12 +183,16 @@ function KpiCard({ label, value, icon: Icon, series, tone = 'primary', trend, no
   );
 }
 
-function SectionHeader({ icon: Icon, title, description, action }) {
+function SectionHeader({ icon: Icon, iconSrc, title, description, action }) {
   return (
     <div className="mb-4 flex items-start justify-between gap-4">
       <div className="min-w-0">
         <h2 className="flex items-center gap-2 text-lg font-semibold text-foreground">
-          <Icon className="h-4.5 w-4.5 text-primary" />
+          {iconSrc ? (
+            <DashboardIcon src={iconSrc} className={DASHBOARD_ICON_SIZES.section} />
+          ) : (
+            <Icon className="h-4.5 w-4.5 text-primary" />
+          )}
           {title}
         </h2>
         <p className="mt-1 text-sm text-muted-foreground">{description}</p>
@@ -178,6 +215,7 @@ function EmptyState({ icon: Icon, title, description }) {
 }
 
 export default function SuperuserDashboard() {
+  const [departmentSearch, setDepartmentSearch] = useState('');
   const { data: allUsers = [] } = useQuery({
     queryKey: ['allUsers'],
     queryFn: () => base44.entities.User.list(),
@@ -225,11 +263,42 @@ export default function SuperuserDashboard() {
     { name: 'Blocked', value: blockedTasks.length },
   ].filter((item) => item.value > 0)), [allTasks, blockedTasks.length, completedTasks.length]);
 
-  const deptData = useMemo(() => departments.map((dept) => ({
-    name: dept.name.length > 10 ? `${dept.name.slice(0, 10)}…` : dept.name,
-    tasks: allTasks.filter((task) => task.department_id === dept.id).length,
-    staff: allUsers.filter((userItem) => userItem.department_id === dept.id).length,
-  })), [allTasks, allUsers, departments]);
+  const departmentRows = useMemo(() => departments
+    .map((dept) => ({
+      id: dept.id,
+      name: dept.name || 'Unnamed department',
+      tasks: allTasks.filter((task) => task.department_id === dept.id).length,
+      staff: allUsers.filter((userItem) => userItem.department_id === dept.id).length,
+    }))
+    .sort((left, right) => right.tasks - left.tasks || right.staff - left.staff || left.name.localeCompare(right.name)), [allTasks, allUsers, departments]);
+
+  const departmentChartData = useMemo(() => {
+    const topDepartments = departmentRows.slice(0, 10);
+    const otherDepartments = departmentRows.slice(10);
+    if (!otherDepartments.length) return topDepartments;
+
+    const otherTotals = otherDepartments.reduce((acc, department) => {
+      acc.tasks += department.tasks;
+      acc.staff += department.staff;
+      return acc;
+    }, { tasks: 0, staff: 0 });
+
+    return [
+      ...topDepartments,
+      {
+        id: 'other-departments',
+        name: 'Other departments',
+        tasks: otherTotals.tasks,
+        staff: otherTotals.staff,
+      },
+    ];
+  }, [departmentRows]);
+
+  const filteredDepartmentRows = useMemo(() => {
+    const query = departmentSearch.trim().toLowerCase();
+    if (!query) return departmentRows;
+    return departmentRows.filter((department) => department.name.toLowerCase().includes(query));
+  }, [departmentRows, departmentSearch]);
 
   const staffSeries = useMemo(() => buildDailySeries(staffUsers, 14), [staffUsers]);
   const projectSeries = useMemo(() => buildDailySeries(activeProjects, 14), [activeProjects]);
@@ -251,52 +320,40 @@ export default function SuperuserDashboard() {
   const activityTrend = useMemo(() => getTrendLabel(activitySeries), [activitySeries]);
 
   const liveSummary = useMemo(() => [
-    { label: 'Blocked tasks', value: blockedTasks.length, tone: blockedTasks.length > 0 ? 'red' : 'green' },
-    { label: 'Pending approvals', value: pendingTimesheets.length, tone: pendingTimesheets.length > 0 ? 'amber' : 'green' },
-    { label: 'Active projects', value: activeProjects.length, tone: 'primary' },
-    { label: 'Recent events', value: recentLogs.length, tone: 'purple' },
+    { label: 'Blocked tasks', value: blockedTasks.length, tone: blockedTasks.length > 0 ? 'red' : 'green', iconSrc: dashboardIcon13 },
+    { label: 'Pending approvals', value: pendingTimesheets.length, tone: pendingTimesheets.length > 0 ? 'amber' : 'green', iconSrc: dashboardIcon3 },
+    { label: 'Active projects', value: activeProjects.length, tone: 'primary', iconSrc: dashboardIcon4 },
+    { label: 'Recent events', value: recentLogs.length, tone: 'purple', iconSrc: dashboardIcon16 },
   ], [activeProjects.length, blockedTasks.length, pendingTimesheets.length, recentLogs.length]);
 
   const quickActions = [
-    { label: 'Manage Users', to: '/users', description: 'Create and assign accounts', icon: Users },
-    { label: 'Review Timesheets', to: '/timesheets/review', description: 'Approve pending work', icon: Clock },
-    { label: 'Open Reports', to: '/admin-reports', description: 'Export and inspect KPIs', icon: FileText },
-    { label: 'Audit Trail', to: '/audit-trail', description: 'See governance activity', icon: ShieldCheck },
+    { label: 'Manage Users', to: '/users', description: 'Create and assign accounts', iconSrc: dashboardIcon1 },
+    { label: 'Review Timesheets', to: '/timesheets/review', description: 'Approve pending work', iconSrc: dashboardIcon20 },
+    { label: 'Open Reports', to: '/admin-reports', description: 'Export and inspect KPIs', iconSrc: dashboardIcon11 },
+    { label: 'Audit Trail', to: '/audit-trail', description: 'See governance activity', iconSrc: dashboardIcon12 },
   ];
 
   return (
     <PageShell>
       <PageHeader
-        title="Global Dashboard"
+        title="Super User Dashboard"
         description="Organization-wide overview of tasks, teams, productivity, and operational health."
       />
 
-      <div className="rounded-3xl border border-border/70 bg-gradient-to-br from-slate-50 via-white to-slate-100 px-6 py-6 text-foreground shadow-sm dark:border-slate-200/10 dark:from-slate-950 dark:via-slate-900 dark:to-slate-800 dark:text-white">
-        <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
-          <div className="max-w-3xl">
-            <div className="inline-flex items-center gap-2 rounded-full border border-border bg-background/80 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.3em] text-muted-foreground dark:border-white/10 dark:bg-white/5 dark:text-slate-300">
-              <Sparkles className="h-3.5 w-3.5" />
-              Superuser Command Center
+      <div className="rounded-3xl border border-border/70 bg-gradient-to-br from-card via-background to-muted/30 px-6 py-6 text-foreground shadow-sm">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {[
+            { label: 'Staff', value: staffUsers.length, iconSrc: dashboardIcon1 },
+            { label: 'Projects', value: allProjects.length, iconSrc: dashboardIcon2 },
+            { label: 'Pending', value: pendingTimesheets.length, iconSrc: dashboardIcon3 },
+            { label: 'Activity', value: recentLogs.length, iconSrc: dashboardIcon4 },
+          ].map((item) => (
+            <div key={item.label} className="flex flex-col items-center rounded-2xl border border-border bg-card px-3 py-3 text-center shadow-sm">
+              <DashboardIcon src={item.iconSrc} className={`mb-2 ${DASHBOARD_ICON_SIZES.hero}`} />
+              <p className="text-[11px] uppercase tracking-[0.24em] text-muted-foreground">{item.label}</p>
+              <p className="mt-1 text-2xl font-semibold text-foreground">{item.value}</p>
             </div>
-            <h1 className="mt-4 text-3xl font-semibold tracking-tight sm:text-4xl">Global operations at a glance</h1>
-            <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground dark:text-slate-300">
-              Monitor approvals, staffing, project activity, and audit signals in one clean executive view designed for fast decisions.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            {[
-              { label: 'Staff', value: staffUsers.length },
-              { label: 'Projects', value: allProjects.length },
-              { label: 'Pending', value: pendingTimesheets.length },
-              { label: 'Activity', value: recentLogs.length },
-            ].map((item) => (
-              <div key={item.label} className="rounded-2xl border border-border bg-background/80 px-4 py-3 backdrop-blur dark:border-white/10 dark:bg-white/5">
-                <p className="text-[11px] uppercase tracking-[0.24em] text-muted-foreground dark:text-slate-300">{item.label}</p>
-                <p className="mt-2 text-2xl font-semibold text-foreground dark:text-white">{item.value}</p>
-              </div>
-            ))}
-          </div>
+          ))}
         </div>
       </div>
 
@@ -306,7 +363,7 @@ export default function SuperuserDashboard() {
             featured
             label="Approved Hours"
             value={`${Math.round(totalHours)}h`}
-            icon={Clock}
+            iconSrc={dashboardIcon20}
             tone="primary"
             trend={hoursTrend}
             note="Total approved time across the organization."
@@ -317,7 +374,7 @@ export default function SuperuserDashboard() {
           <KpiCard
             label="Total Staff"
             value={staffUsers.length}
-            icon={Users}
+            iconSrc={dashboardIcon1}
             tone="green"
             trend={staffTrend}
             note="Active staff members in the system."
@@ -326,7 +383,7 @@ export default function SuperuserDashboard() {
           <KpiCard
             label="Active Projects"
             value={activeProjects.length}
-            icon={FolderKanban}
+            iconSrc={dashboardIcon2}
             tone="purple"
             trend={projectTrend}
             note="Projects currently available to teams."
@@ -335,7 +392,7 @@ export default function SuperuserDashboard() {
           <KpiCard
             label="Pending Approvals"
             value={pendingTimesheets.length}
-            icon={AlertCircle}
+            iconSrc={dashboardIcon3}
             tone="amber"
             trend={approvalsTrend}
             note="Timesheets awaiting review."
@@ -354,22 +411,22 @@ export default function SuperuserDashboard() {
       </div>
 
       {pendingTimesheets.length > 0 && (
-        <div className="mt-6 flex items-start justify-between gap-4 rounded-2xl border border-amber-200 bg-amber-50/90 px-4 py-4 shadow-sm">
+        <div className="mt-6 flex items-start justify-between gap-4 rounded-2xl border border-amber-200/80 bg-card px-4 py-4 shadow-sm dark:border-amber-900/40 dark:bg-card">
           <div className="flex items-start gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-amber-100 text-amber-700">
-              <AlertCircle className="h-5 w-5" />
+            <div className={`flex shrink-0 items-center justify-center rounded-2xl bg-transparent ${DASHBOARD_ICON_SIZES.alert}`}>
+              <DashboardIcon src={dashboardIcon18} className={DASHBOARD_ICON_SIZES.alert} />
             </div>
             <div>
-              <p className="text-sm font-semibold text-amber-950">
+              <p className="text-sm font-semibold text-foreground">
                 {pendingTimesheets.length} timesheet{pendingTimesheets.length > 1 ? 's' : ''} are waiting for approval
               </p>
-              <p className="mt-1 text-xs text-amber-800">
+              <p className="mt-1 text-xs text-muted-foreground">
                 Keep an eye on approvals to maintain flow across the teams.
               </p>
             </div>
           </div>
           <Link to="/timesheets/review">
-            <Button size="sm" className="bg-amber-600 text-white hover:bg-amber-700">
+            <Button size="sm">
               Review
             </Button>
           </Link>
@@ -391,8 +448,12 @@ export default function SuperuserDashboard() {
                   to={action.to}
                   className="group flex items-start gap-3 rounded-2xl border border-border bg-background p-4 transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/25 hover:bg-primary/5 hover:shadow-sm"
                 >
-                  <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-primary/10 text-primary transition-colors group-hover:bg-primary/15">
-                    <action.icon className="h-5 w-5" />
+                  <div className={`flex shrink-0 items-center justify-center rounded-2xl transition-colors ${action.iconSrc ? `${DASHBOARD_ICON_SIZES.kpi} bg-transparent` : 'h-11 w-11 bg-primary/10 text-primary group-hover:bg-primary/15'}`}>
+                    {action.iconSrc ? (
+                      <DashboardIcon src={action.iconSrc} className={DASHBOARD_ICON_SIZES.kpi} />
+                    ) : (
+                      <action.icon className="h-5 w-5" />
+                    )}
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center justify-between gap-2">
@@ -424,9 +485,10 @@ export default function SuperuserDashboard() {
 
             <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
               {liveSummary.map((item) => (
-                <div key={item.label} className={`rounded-2xl border px-4 py-3 ${KPI_TONES[item.tone]?.tint || KPI_TONES.slate.tint}`}>
+                <div key={item.label} className={`rounded-2xl px-4 py-3 ${KPI_TONES[item.tone]?.tint || KPI_TONES.slate.tint} ${item.iconSrc ? 'flex flex-col items-center text-center' : ''}`}>
+                  {item.iconSrc ? <DashboardIcon src={item.iconSrc} className={`mb-2 ${DASHBOARD_ICON_SIZES.hero}`} /> : null}
                   <p className="text-[11px] font-semibold uppercase tracking-[0.2em] opacity-80">{item.label}</p>
-                  <p className="mt-2 text-2xl font-semibold">{item.value}</p>
+                  <p className="mt-2 text-2xl font-semibold text-foreground">{item.value}</p>
                 </div>
               ))}
             </div>
@@ -436,8 +498,8 @@ export default function SuperuserDashboard() {
                 <div className="space-y-2">
                   {recentLogs.map((log) => (
                     <div key={log.id} className="flex items-start gap-3 rounded-2xl border border-border/70 bg-muted/20 px-4 py-3 transition-colors hover:bg-muted/40">
-                      <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary">
-                        <Activity className="h-4 w-4" />
+                      <div className={`mt-0.5 flex shrink-0 items-center justify-center rounded-2xl bg-transparent ${DASHBOARD_ICON_SIZES.inline}`}>
+                        <DashboardIcon src={dashboardIcon17} className={DASHBOARD_ICON_SIZES.inline} />
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
@@ -467,19 +529,25 @@ export default function SuperuserDashboard() {
       <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
         <div className="rounded-2xl border border-border/70 bg-card p-5 shadow-sm transition-all duration-200 hover:shadow-md">
           <SectionHeader
-            icon={Building2}
+            iconSrc={dashboardIcon19}
             title="Tasks &amp; Staff by Department"
-            description="Department workload and staffing density in one view."
+            description="Top department workload with a full searchable breakdown below."
           />
-          {deptData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={280}>
-              <BarChart data={deptData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.5} />
-                <XAxis dataKey="name" tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} />
-                <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} />
+          {departmentChartData.length > 0 ? (
+            <ResponsiveContainer width="100%" height={360}>
+              <BarChart data={departmentChartData} layout="vertical" margin={{ top: 8, right: 24, left: 16, bottom: 8 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.45} horizontal={false} />
+                <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} />
+                <YAxis
+                  type="category"
+                  dataKey="name"
+                  width={150}
+                  tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
+                />
                 <Tooltip contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '14px', fontSize: '13px' }} />
-                <Bar dataKey="tasks" name="Tasks" fill="hsl(var(--primary))" radius={[6, 6, 0, 0]} />
-                <Bar dataKey="staff" name="Staff" fill="hsl(var(--accent))" radius={[6, 6, 0, 0]} />
+                <Legend iconType="circle" iconSize={8} />
+                <Bar dataKey="tasks" name="Tasks" fill="hsl(var(--primary))" radius={[0, 6, 6, 0]} barSize={14} />
+                <Bar dataKey="staff" name="Staff" fill="hsl(var(--accent))" radius={[0, 6, 6, 0]} barSize={14} />
               </BarChart>
             </ResponsiveContainer>
           ) : (
@@ -489,11 +557,53 @@ export default function SuperuserDashboard() {
               description="Once teams are populated, this chart will show department workload and staff distribution."
             />
           )}
+
+          <div className="mt-6 border-t border-border pt-5">
+            <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-sm font-semibold text-foreground">Department breakdown</p>
+                <p className="text-xs text-muted-foreground">Search the full list below for exact department counts.</p>
+              </div>
+              <div className="w-full sm:w-72">
+                <Input
+                  type="search"
+                  placeholder="Search departments..."
+                  value={departmentSearch}
+                  onChange={(event) => setDepartmentSearch(event.target.value)}
+                />
+              </div>
+            </div>
+
+            {filteredDepartmentRows.length > 0 ? (
+              <div className="overflow-hidden rounded-2xl border border-border/70">
+                <div className="grid grid-cols-[1fr_96px_96px] gap-3 border-b border-border bg-muted/30 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  <span>Department</span>
+                  <span className="text-right">Tasks</span>
+                  <span className="text-right">Staff</span>
+                </div>
+                <div className="max-h-[290px] divide-y divide-border overflow-y-auto">
+                  {filteredDepartmentRows.map((department) => (
+                    <div key={department.id} className="grid grid-cols-[1fr_96px_96px] gap-3 px-4 py-3 transition-colors hover:bg-muted/30">
+                      <span className="min-w-0 truncate text-sm font-medium text-foreground">{department.name}</span>
+                      <span className="text-right text-sm text-muted-foreground">{department.tasks}</span>
+                      <span className="text-right text-sm text-muted-foreground">{department.staff}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <EmptyState
+                icon={Building2}
+                title="No departments match your search"
+                description="Try a different department name to narrow the list."
+              />
+            )}
+          </div>
         </div>
 
         <div className="rounded-2xl border border-border/70 bg-card p-5 shadow-sm transition-all duration-200 hover:shadow-md">
           <SectionHeader
-            icon={TrendingUp}
+            iconSrc={dashboardIcon4}
             title="Task Status Distribution"
             description="A quick read on how work is moving through the workflow."
           />

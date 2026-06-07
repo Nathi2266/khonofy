@@ -2,8 +2,16 @@ import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import StatsCard from '@/components/StatsCard';
 import TaskCard from '@/components/TaskCard';
+import DashboardIcon, { DASHBOARD_ICON_SIZES } from '@/components/DashboardIcon';
+import { TIMESHEET_STATUS_ICONS, TIMESHEET_STATUS_STYLES } from '@/constants/dashboardIcons';
+import dashboardIcon3 from '@/assets/images/dashboard/3.png';
+import dashboardIcon4 from '@/assets/images/dashboard/4.png';
+import dashboardIcon5 from '@/assets/images/dashboard/5.png';
+import dashboardIcon10 from '@/assets/images/dashboard/10.png';
+import dashboardIcon18 from '@/assets/images/dashboard/18.png';
+import dashboardIcon20 from '@/assets/images/dashboard/20.png';
 import { Link } from 'react-router-dom';
-import { ClipboardList, Clock, CheckCircle2, AlertCircle, ArrowRight, Info } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import PageHeader from '@/components/PageHeader';
 import PageShell from '@/components/PageShell';
@@ -43,7 +51,7 @@ export default function StaffDashboard({ user }) {
 
       {!user.admin_id && (
         <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 flex items-start gap-3">
-          <Info className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+          <DashboardIcon src={dashboardIcon18} className={`flex-shrink-0 mt-0.5 ${DASHBOARD_ICON_SIZES.section}`} />
           <div>
             <p className="text-sm font-semibold text-blue-900">
               No admin has been allocated to you yet
@@ -56,13 +64,13 @@ export default function StaffDashboard({ user }) {
       )}
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatsCard label="Hours Today" value={hoursToday.toFixed(1)} icon={Clock} color="primary" />
-        <StatsCard label="Open Tasks" value={openTasks} icon={ClipboardList} color="amber" />
-        <StatsCard label="Completed Tasks" value={completedTasks} icon={CheckCircle2} color="green" />
+        <StatsCard label="Hours Today" value={hoursToday.toFixed(1)} iconSrc={dashboardIcon5} color="primary" />
+        <StatsCard label="Open Tasks" value={openTasks} iconSrc={dashboardIcon4} color="amber" />
+        <StatsCard label="Completed Tasks" value={completedTasks} iconSrc={dashboardIcon20} color="green" />
         <StatsCard
           label="Timesheet Status"
           value={pendingTimesheet ? 'Pending' : 'Up to date'}
-          icon={AlertCircle}
+          iconSrc={pendingTimesheet ? dashboardIcon3 : dashboardIcon20}
           color={pendingTimesheet ? 'amber' : 'green'}
         />
       </div>
@@ -70,7 +78,10 @@ export default function StaffDashboard({ user }) {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-card rounded-xl border border-border p-5">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="font-semibold text-foreground">My Active Tasks</h2>
+            <h2 className="font-semibold text-foreground flex items-center gap-2">
+              <DashboardIcon src={dashboardIcon4} className={DASHBOARD_ICON_SIZES.section} />
+              My Active Tasks
+            </h2>
             <Link to="/daily-log">
               <Button variant="ghost" size="sm" className="text-primary gap-1">
                 Log Time <ArrowRight className="w-3.5 h-3.5" />
@@ -89,7 +100,10 @@ export default function StaffDashboard({ user }) {
 
         <div className="bg-card rounded-xl border border-border p-5">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="font-semibold text-foreground">Recent Timesheets</h2>
+            <h2 className="font-semibold text-foreground flex items-center gap-2">
+              <DashboardIcon src={dashboardIcon10} className={DASHBOARD_ICON_SIZES.section} />
+              Recent Timesheets
+            </h2>
             <Link to="/timesheets">
               <Button variant="ghost" size="sm" className="text-primary gap-1">
                 View All <ArrowRight className="w-3.5 h-3.5" />
@@ -119,15 +133,13 @@ export default function StaffDashboard({ user }) {
 }
 
 function StatusBadge({ status }) {
-  const s = {
-    draft: 'bg-slate-100 text-slate-600',
-    pending: 'bg-amber-100 text-amber-700',
-    approved: 'bg-emerald-100 text-emerald-700',
-    rejected: 'bg-red-100 text-red-600',
-  };
+  const iconSrc = TIMESHEET_STATUS_ICONS[status];
+  const style = TIMESHEET_STATUS_STYLES[status] || TIMESHEET_STATUS_STYLES.draft;
+
   return (
-    <span className={`text-xs font-medium px-2.5 py-0.5 rounded-full ${s[status] || s.draft}`}>
-      {status}
+    <span className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-0.5 rounded-full ${style}`}>
+      {iconSrc ? <DashboardIcon src={iconSrc} className={DASHBOARD_ICON_SIZES.inline} /> : null}
+      {status === 'pending' ? 'Pending Review' : status}
     </span>
   );
 }

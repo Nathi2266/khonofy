@@ -3,7 +3,14 @@ import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import StatsCard from '@/components/StatsCard';
-import { Clock, Users, TrendingUp, CalendarDays } from 'lucide-react';
+import DashboardIcon, { DASHBOARD_ICON_SIZES } from '@/components/DashboardIcon';
+import dashboardIcon1 from '@/assets/images/dashboard/1.png';
+import dashboardIcon3 from '@/assets/images/dashboard/3.png';
+import dashboardIcon4 from '@/assets/images/dashboard/4.png';
+import dashboardIcon5 from '@/assets/images/dashboard/5.png';
+import dashboardIcon20 from '@/assets/images/dashboard/20.png';
+import dashboardIcon19 from '@/assets/images/dashboard/19.png';
+import { CalendarDays } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import PageHeader from '@/components/PageHeader';
@@ -111,16 +118,19 @@ export default function AdminReports() {
 
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatsCard label="Approved Hours" value={Math.round(totalApproved)} icon={Clock} color="green" />
-        <StatsCard label="Pending Hours" value={Math.round(totalPending)} icon={Clock} color="amber" />
-        <StatsCard label="Task Completion" value={`${completionRate}%`} icon={TrendingUp} color="primary" />
-        <StatsCard label="Active Staff" value={allUsers.filter(u => u.role === 'staff').length} icon={Users} color="blue" />
+        <StatsCard label="Approved Hours" value={Math.round(totalApproved)} iconSrc={dashboardIcon20} color="green" />
+        <StatsCard label="Pending Hours" value={Math.round(totalPending)} iconSrc={dashboardIcon3} color="amber" />
+        <StatsCard label="Task Completion" value={`${completionRate}%`} iconSrc={dashboardIcon4} color="primary" />
+        <StatsCard label="Active Staff" value={allUsers.filter(u => u.role === 'staff').length} iconSrc={dashboardIcon1} color="blue" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Dept hours bar chart */}
         <div className="bg-card rounded-xl border border-border p-5">
-          <h2 className="font-semibold text-foreground mb-4">Hours by Department</h2>
+          <h2 className="font-semibold text-foreground mb-4 flex items-center gap-2">
+            <DashboardIcon src={dashboardIcon19} className={DASHBOARD_ICON_SIZES.section} />
+            Hours by Department
+          </h2>
           {deptHoursData.length > 0 ? (
             <ResponsiveContainer width="100%" height={300}>
               <BarChart data={deptHoursData} margin={{ bottom: 20 }}>
@@ -147,7 +157,10 @@ export default function AdminReports() {
 
         {/* Weekly trend */}
         <div className="bg-card rounded-xl border border-border p-5">
-          <h2 className="font-semibold text-foreground mb-4">Weekly Hours Trend</h2>
+          <h2 className="font-semibold text-foreground mb-4 flex items-center gap-2">
+            <DashboardIcon src={dashboardIcon5} className={DASHBOARD_ICON_SIZES.section} />
+            Weekly Hours Trend
+          </h2>
           {weeklyData.length > 0 ? (
             <ResponsiveContainer width="100%" height={260}>
               <BarChart data={weeklyData}>
@@ -166,7 +179,8 @@ export default function AdminReports() {
 
       {/* Dept breakdown table */}
       <div className="bg-card rounded-xl border border-border overflow-hidden">
-        <div className="px-4 py-3 border-b border-border bg-muted/30 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+        <div className="flex items-center gap-2 px-4 py-3 border-b border-border bg-muted/30 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+          <DashboardIcon src={dashboardIcon19} className={DASHBOARD_ICON_SIZES.section} />
           Department Breakdown
         </div>
         <div className="divide-y divide-border">

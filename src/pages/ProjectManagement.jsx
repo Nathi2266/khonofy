@@ -18,7 +18,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Building2, FolderKanban, Pencil, Plus, Clock, Users, FileDown, FileText } from 'lucide-react';
+import DashboardIcon, { DASHBOARD_ICON_SIZES } from '@/components/DashboardIcon';
+import dashboardIcon1 from '@/assets/images/dashboard/1.png';
+import dashboardIcon2 from '@/assets/images/dashboard/2.png';
+import dashboardIcon20 from '@/assets/images/dashboard/20.png';
+import dashboardIcon19 from '@/assets/images/dashboard/19.png';
 import pdfHeaderImage from '@/assets/images/dark_mode.png';
 import pdfFooterImage from '@/assets/images/red_disc.png';
 
@@ -106,7 +110,7 @@ function ProjectApprovedHoursWidget({ stats, loading }) {
     return (
       <div className="mt-3 rounded-lg border border-dashed border-border bg-muted/10 px-3 py-2.5">
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <Clock className="h-3.5 w-3.5" />
+          <DashboardIcon src={dashboardIcon20} className={DASHBOARD_ICON_SIZES.section} />
           <span>No approved timesheet hours yet</span>
         </div>
       </div>
@@ -117,7 +121,7 @@ function ProjectApprovedHoursWidget({ stats, loading }) {
     <div className="mt-3 rounded-lg border border-primary/15 bg-primary/5 px-3 py-3">
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          <Clock className="h-3.5 w-3.5 text-primary" />
+          <DashboardIcon src={dashboardIcon20} className={DASHBOARD_ICON_SIZES.section} />
           Approved hours
         </div>
         <span className="text-lg font-bold text-primary">{stats.totalHours.toFixed(1)}h</span>
@@ -126,7 +130,7 @@ function ProjectApprovedHoursWidget({ stats, loading }) {
       {stats.members.length > 0 ? (
         <div className="mt-2.5 space-y-2">
           <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-            <Users className="h-3.5 w-3.5" />
+            <DashboardIcon src={dashboardIcon1} className={DASHBOARD_ICON_SIZES.section} />
             Staff on this project
           </div>
           <div className="space-y-1.5">
@@ -146,13 +150,13 @@ function ProjectApprovedHoursWidget({ stats, loading }) {
   );
 }
 
-function EntitySection({ title, description, icon: Icon, children, action }) {
+function EntitySection({ title, description, iconSrc, children, action }) {
   return (
     <div className="bg-card rounded-xl border border-border overflow-hidden">
       <div className="flex items-start justify-between gap-3 border-b border-border bg-muted/30 px-5 py-4">
         <div>
           <h2 className="flex items-center gap-2 text-lg font-semibold text-foreground">
-            <Icon className="h-5 w-5 text-primary" />
+            <DashboardIcon src={iconSrc} className={DASHBOARD_ICON_SIZES.section} />
             {title}
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">{description}</p>
@@ -649,10 +653,9 @@ export default function ProjectManagement() {
         <EntitySection
           title="Clients"
           description="Create and manage clients that group project work."
-          icon={Building2}
+          iconSrc={dashboardIcon19}
           action={(
-            <Button onClick={openCreateClientDialog} className="gap-2">
-              <Plus className="h-4 w-4" />
+            <Button onClick={openCreateClientDialog}>
               New Client
             </Button>
           )}
@@ -671,11 +674,11 @@ export default function ProjectManagement() {
                       </span>
                       <Button
                         variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                        size="sm"
+                        className="text-muted-foreground hover:text-foreground"
                         onClick={() => openEditClientDialog(client)}
                       >
-                        <Pencil className="h-3.5 w-3.5" />
+                        Edit
                       </Button>
                     </div>
                   </div>
@@ -683,7 +686,8 @@ export default function ProjectManagement() {
                 </div>
               ))}
               {clients.length === 0 ? (
-                <div className="rounded-lg border border-dashed border-border p-6 text-sm text-muted-foreground">
+                <div className="rounded-lg border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
+                  <DashboardIcon src={dashboardIcon19} className={`mx-auto mb-3 opacity-40 ${DASHBOARD_ICON_SIZES.hero}`} />
                   No clients yet. Create one to start grouping projects.
                 </div>
               ) : null}
@@ -694,23 +698,20 @@ export default function ProjectManagement() {
         <EntitySection
           title="Projects"
           description="Projects can carry a client, color, department, and default billable setting. Approved timesheet hours are shown per project."
-          icon={FolderKanban}
+          iconSrc={dashboardIcon2}
           action={(
             <div className="flex flex-wrap items-center gap-2">
               {isSuperuser ? (
                 <>
-                  <Button variant="outline" onClick={handleExportCsv} className="gap-2">
-                    <FileText className="h-4 w-4" />
+                  <Button variant="outline" onClick={handleExportCsv}>
                     Export CSV
                   </Button>
-                  <Button variant="outline" onClick={handleExportPdf} className="gap-2">
-                    <FileDown className="h-4 w-4" />
+                  <Button variant="outline" onClick={handleExportPdf}>
                     Export PDF
                   </Button>
                 </>
               ) : null}
-              <Button onClick={openCreateProjectDialog} className="gap-2">
-                <Plus className="h-4 w-4" />
+              <Button onClick={openCreateProjectDialog}>
                 New Project
               </Button>
             </div>
@@ -736,11 +737,11 @@ export default function ProjectManagement() {
                       </span>
                       <Button
                         variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                        size="sm"
+                        className="text-muted-foreground hover:text-foreground"
                         onClick={() => openEditProjectDialog(project)}
                       >
-                        <Pencil className="h-3.5 w-3.5" />
+                        Edit
                       </Button>
                     </div>
                   </div>
@@ -757,7 +758,8 @@ export default function ProjectManagement() {
                 </div>
               ))}
               {projects.length === 0 ? (
-                <div className="rounded-lg border border-dashed border-border p-6 text-sm text-muted-foreground">
+                <div className="rounded-lg border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
+                  <DashboardIcon src={dashboardIcon2} className={`mx-auto mb-3 opacity-40 ${DASHBOARD_ICON_SIZES.hero}`} />
                   No projects yet. Create one so calendar entries can be linked to project work.
                 </div>
               ) : null}

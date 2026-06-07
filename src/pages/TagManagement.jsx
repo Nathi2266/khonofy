@@ -25,7 +25,11 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
-import { Tag, Plus, Pencil, Trash2, Building2, BadgeCheck } from 'lucide-react';
+import DashboardIcon, { DASHBOARD_ICON_SIZES } from '@/components/DashboardIcon';
+import dashboardIcon1 from '@/assets/images/dashboard/1.png';
+import dashboardIcon4 from '@/assets/images/dashboard/4.png';
+import dashboardIcon19 from '@/assets/images/dashboard/19.png';
+import { Plus, Pencil, Trash2 } from 'lucide-react';
 
 const PRESET_COLORS = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899', '#84cc16', '#f97316', '#64748b'];
 const EMPTY_FORM = { name: '', color: '#6366f1', description: '' };
@@ -56,7 +60,7 @@ function uniqueNormalizedLines(value) {
 function PaginatedTable({
   title,
   description,
-  icon: Icon,
+  iconSrc,
   items,
   isLoading,
   emptyTitle,
@@ -76,7 +80,7 @@ function PaginatedTable({
       <div className="flex items-start justify-between gap-3 px-4 py-4 border-b border-border bg-muted/30">
         <div>
           <h2 className="font-semibold text-foreground flex items-center gap-2">
-            <Icon className="w-4 h-4 text-primary" />
+            <DashboardIcon src={iconSrc} className={DASHBOARD_ICON_SIZES.section} />
             {title}
           </h2>
           <p className="text-sm text-muted-foreground mt-1">{description}</p>
@@ -118,7 +122,7 @@ function PaginatedTable({
           </div>
           {items.length === 0 ? (
             <div className="text-center py-12">
-              <Icon className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
+              <DashboardIcon src={iconSrc} className={`mx-auto mb-3 opacity-40 ${DASHBOARD_ICON_SIZES.hero}`} />
               <p className="font-medium text-foreground">{emptyTitle}</p>
               <p className="text-muted-foreground text-sm">{emptyDescription}</p>
             </div>
@@ -325,7 +329,6 @@ export default function TagManagement() {
       <PageHeader
         title="Tag Management"
         description="Create tags, departments, and designations used across the app."
-        icon={Tag}
       />
 
       <div className="w-full space-y-6">
@@ -337,11 +340,11 @@ export default function TagManagement() {
           {isSuperuser ? (
             <>
               <Button variant="outline" onClick={() => openBulkDialog('department')} className="gap-2">
-                <Building2 className="w-4 h-4" />
+                <DashboardIcon src={dashboardIcon19} className={DASHBOARD_ICON_SIZES.section} />
                 + Department
               </Button>
               <Button variant="outline" onClick={() => openBulkDialog('designation')} className="gap-2">
-                <BadgeCheck className="w-4 h-4" />
+                <DashboardIcon src={dashboardIcon1} className={DASHBOARD_ICON_SIZES.section} />
                 + Designation
               </Button>
             </>
@@ -412,7 +415,7 @@ export default function TagManagement() {
             ))}
             {tags.length === 0 && !tagsLoading && (
               <div className="text-center py-12">
-                <Tag className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
+                <DashboardIcon src={dashboardIcon4} className={`mx-auto mb-3 opacity-40 ${DASHBOARD_ICON_SIZES.hero}`} />
                 <p className="font-medium text-foreground">No tags yet</p>
                 <p className="text-muted-foreground text-sm">Create tags so staff can categorize their time entries.</p>
               </div>
@@ -425,7 +428,7 @@ export default function TagManagement() {
             <PaginatedTable
               title="Departments"
               description="Browse departments in pages of twenty."
-              icon={Building2}
+              iconSrc={dashboardIcon19}
               items={filteredDepartments}
               isLoading={departmentsLoading}
               emptyTitle={departmentSearch.trim() ? 'No departments match your search' : 'No departments yet'}
@@ -491,7 +494,7 @@ export default function TagManagement() {
             <PaginatedTable
               title="Designations"
               description="Browse designations in pages of twenty."
-              icon={BadgeCheck}
+              iconSrc={dashboardIcon1}
               items={filteredDesignations}
               isLoading={designationsLoading}
               emptyTitle={designationSearch.trim() ? 'No designations match your search' : 'No designations yet'}

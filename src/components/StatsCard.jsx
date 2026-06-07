@@ -1,4 +1,6 @@
-export default function StatsCard({ label, value, icon: Icon, color = 'primary', sub }) {
+import DashboardIcon, { DASHBOARD_ICON_SIZES } from '@/components/DashboardIcon';
+
+export default function StatsCard({ label, value, icon: Icon, iconSrc, color = 'primary', sub }) {
   const colorMap = {
     primary: 'bg-primary/10 text-primary',
     green: 'bg-emerald-100 text-emerald-600',
@@ -10,8 +12,12 @@ export default function StatsCard({ label, value, icon: Icon, color = 'primary',
 
   return (
     <div className="bg-card rounded-xl border border-border p-5 flex items-start gap-4 hover:shadow-sm transition-shadow">
-      <div className={`w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 ${colorMap[color] || colorMap.primary}`}>
-        {Icon && <Icon className="w-5 h-5" />}
+      <div className={`flex shrink-0 items-center justify-center rounded-xl ${iconSrc ? `${DASHBOARD_ICON_SIZES.kpi} bg-transparent` : `h-11 w-11 ${colorMap[color] || colorMap.primary}`}`}>
+        {iconSrc ? (
+          <DashboardIcon src={iconSrc} className={DASHBOARD_ICON_SIZES.kpi} />
+        ) : Icon ? (
+          <Icon className="w-5 h-5" />
+        ) : null}
       </div>
       <div className="min-w-0">
         <p className="text-sm text-muted-foreground font-medium">{label}</p>

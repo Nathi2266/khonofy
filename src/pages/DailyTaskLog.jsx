@@ -10,8 +10,12 @@ import SectionLoader from '@/components/SectionLoader';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import DashboardIcon, { DASHBOARD_ICON_SIZES } from '@/components/DashboardIcon';
+import dashboardIcon4 from '@/assets/images/dashboard/4.png';
+import dashboardIcon5 from '@/assets/images/dashboard/5.png';
+import dashboardIcon11 from '@/assets/images/dashboard/11.png';
 import {
-  Plus, CheckCircle2, ChevronDown, BookmarkPlus, Layers, Trash2
+  Plus, CheckCircle2, ChevronDown, Layers, Trash2
 } from 'lucide-react';
 import { addHours } from 'date-fns';
 
@@ -258,9 +262,12 @@ export default function DailyTaskLog() {
               <Layers className="w-4 h-4" /> Log {selectedIds.size} Selected
             </Button>
           )}
-          <div className="bg-primary/10 border border-primary/20 rounded-xl px-4 py-3 text-center">
-            <p className="text-2xl font-bold text-primary">{hoursToday.toFixed(1)}h</p>
-            <p className="text-xs text-primary/70 font-medium">logged today</p>
+          <div className="flex items-center gap-3 bg-primary/10 border border-primary/20 rounded-xl px-4 py-3">
+            <DashboardIcon src={dashboardIcon5} className={DASHBOARD_ICON_SIZES.section} />
+            <div className="text-center">
+              <p className="text-2xl font-bold text-primary">{hoursToday.toFixed(1)}h</p>
+              <p className="text-xs text-primary/70 font-medium">logged today</p>
+            </div>
           </div>
         </div>
       </div>
@@ -269,8 +276,9 @@ export default function DailyTaskLog() {
       {templates.length > 0 && (
         <div className="bg-card rounded-xl border border-border p-4">
           <div className="flex items-center justify-between mb-3">
-            <h3 className="text-sm font-semibold text-foreground flex items-center gap-1.5">
-              <BookmarkPlus className="w-4 h-4 text-primary" /> Saved Templates
+            <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+              <DashboardIcon src={dashboardIcon11} className={DASHBOARD_ICON_SIZES.section} />
+              Saved Templates
             </h3>
             <Button variant="ghost" size="sm" className="text-xs" onClick={() => setShowTemplates(!showTemplates)}>
               {showTemplates ? 'Hide' : 'Show all'}
@@ -301,7 +309,10 @@ export default function DailyTaskLog() {
       {/* Today's entries */}
       {todayEntries.length > 0 && (
         <div className="bg-card rounded-xl border border-border p-4">
-          <h2 className="font-semibold text-foreground text-sm mb-3">Today's Logged Time</h2>
+          <h2 className="font-semibold text-foreground text-sm mb-3 flex items-center gap-2">
+            <DashboardIcon src={dashboardIcon5} className={DASHBOARD_ICON_SIZES.section} />
+            Today's Logged Time
+          </h2>
           <div className="space-y-2">
             {todayEntries.map(entry => (
               <div key={entry.id} className="flex items-center justify-between py-1.5 px-3 rounded-lg bg-muted/50">
@@ -438,7 +449,7 @@ export default function DailyTaskLog() {
         })}
         {activeTasks.length === 0 && !isLoading && (
           <div className="text-center py-12 bg-card rounded-xl border border-border">
-            <CheckCircle2 className="w-10 h-10 text-emerald-500 mx-auto mb-3" />
+            <DashboardIcon src={dashboardIcon4} className={`mx-auto mb-3 opacity-60 ${DASHBOARD_ICON_SIZES.hero}`} />
             <p className="font-semibold text-foreground">All tasks complete!</p>
             <p className="text-muted-foreground text-sm">No active tasks assigned to you.</p>
           </div>
@@ -518,7 +529,8 @@ export default function DailyTaskLog() {
             <label className="flex items-center gap-2 cursor-pointer">
               <input type="checkbox" className="rounded" checked={logForm.saveAsTemplate} onChange={(e) => setLogForm({ ...logForm, saveAsTemplate: e.target.checked })} />
               <span className="text-sm text-foreground flex items-center gap-1.5">
-                <BookmarkPlus className="w-4 h-4 text-primary" /> Save as template for future use
+                <DashboardIcon src={dashboardIcon11} className={DASHBOARD_ICON_SIZES.section} />
+                Save as template for future use
               </span>
             </label>
           </div>
