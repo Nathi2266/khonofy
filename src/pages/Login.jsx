@@ -189,21 +189,22 @@ export default function Login() {
           <Button type="submit" className="w-full h-12 rounded-full font-medium bg-primary hover:bg-primary/90 text-white" disabled={loading || !isFormComplete}>
             {loading ? "Logging in..." : "LOGIN"}
           </Button>
-          <div className="space-y-2 pt-1">
+          <div className="flex flex-col items-center gap-1 pt-1">
             <Button
               type="button"
               variant="outline"
-              className="w-full h-10 rounded-full text-sm"
+              size="sm"
+              className="h-7 rounded-full px-3 text-xs"
               onClick={handleSentryTest}
               disabled={sentryTestLoading}
             >
-              {sentryTestLoading ? "Sending test error..." : "Test Sentry"}
+              {sentryTestLoading ? "Sending..." : "Test Sentry"}
             </Button>
             {sentryTestMessage ? (
-              <p className="text-center text-xs text-muted-foreground">{sentryTestMessage}</p>
+              <p className="text-center text-[11px] text-muted-foreground">{sentryTestMessage}</p>
             ) : (
-              <p className="text-center text-xs text-muted-foreground">
-                Sends a test error to Sentry so you can verify monitoring is working.
+              <p className="text-center text-[11px] text-muted-foreground">
+                Verify Sentry monitoring is working.
               </p>
             )}
           </div>
