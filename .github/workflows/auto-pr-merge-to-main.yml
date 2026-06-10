@@ -1,13 +1,16 @@
-name: Auto PR merge via deploy
+# Feature branch push -> open PR to deploy -> merge into deploy.
+# Pushes to deploy then trigger frontend/backend Azure workflows separately.
+name: Auto PR merge to deploy
 
 on:
   push:
     branches-ignore:
       - main
+      - deploy
   workflow_dispatch:
     inputs:
       branch:
-        description: Source branch to promote via deploy into main
+        description: Feature branch to merge into deploy
         required: true
         type: string
 
@@ -31,8 +34,7 @@ jobs:
             echo "name=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Merge source branch into deploy
-        if: steps.branch.outputs.name != 'deploy'
+      - name: Open PR and merge into deploy
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SOURCE_BRANCH: ${{ steps.branch.outputs.name }}

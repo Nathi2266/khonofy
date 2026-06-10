@@ -1,3 +1,4 @@
+# Runs on every push to deploy (and main): version, frontend build, Azure deploy, then version PR to main.
 name: Azure Static Web Apps CI/CD
 
 on:
