@@ -21,6 +21,10 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [sentryTestMessage, setSentryTestMessage] = useState("");
   const [sentryTestLoading, setSentryTestLoading] = useState(false);
+  const [backendSentryTestLoading, setBackendSentryTestLoading] = useState(false);
+
+  // @ts-ignore
+  const apiBase = (import.meta.env.VITE_API_URL || "http://localhost:3001").replace(/\/$/, "");
 
   useEffect(() => {
     if (authChecked && isAuthenticated) {
@@ -54,6 +58,25 @@ export default function Login() {
   const trimmedEmail = email.trim();
   const passwordValue = password;
   const isFormComplete = Boolean(trimmedEmail && passwordValue);
+
+  const handleBackendSentryTest = async () => {
+    setSentryTestMessage("");
+    setBackendSentryTestLoading(true);
+    try {
+      const response = await fetch(`${apiBase}/api/debug/sentry-test`);
+      if (!response.ok) {
+        setSentryTestMessage(
+          "Backend test error sent. Check your backend Sentry project for the connectivity test."
+        );
+        return;
+      }
+      setSentryTestMessage("Backend responded without an error. Sentry test may not have fired.");
+    } catch {
+      setSentryTestMessage("Could not reach the backend Sentry test endpoint.");
+    } finally {
+      setBackendSentryTestLoading(false);
+    }
+  };
 
   const handleSentryTest = async () => {
     setSentryTestMessage("");
@@ -190,21 +213,33 @@ export default function Login() {
             {loading ? "Logging in..." : "LOGIN"}
           </Button>
           <div className="flex flex-col items-center gap-1 pt-1">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="h-7 rounded-full px-3 text-xs"
-              onClick={handleSentryTest}
-              disabled={sentryTestLoading}
-            >
-              {sentryTestLoading ? "Sending..." : "Test Sentry"}
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-7 rounded-full px-3 text-xs"
+                onClick={handleSentryTest}
+                disabled={sentryTestLoading || backendSentryTestLoading}
+              >
+                {sentryTestLoading ? "Sending..." : "Test Frontend"}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-7 rounded-full px-3 text-xs"
+                onClick={handleBackendSentryTest}
+                disabled={sentryTestLoading || backendSentryTestLoading}
+              >
+                {backendSentryTestLoading ? "Sending..." : "Test Backend"}
+              </Button>
+            </div>
             {sentryTestMessage ? (
               <p className="text-center text-[11px] text-muted-foreground">{sentryTestMessage}</p>
             ) : (
               <p className="text-center text-[11px] text-muted-foreground">
-                Verify Sentry monitoring is working.
+                Send test errors to Sentry from the frontend or backend.
               </p>
             )}
           </div>
