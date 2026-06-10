@@ -12,6 +12,7 @@ on:
       - 'package.json'
       - 'package-lock.json'
       - 'vite.config.js'
+      - 'src/instrument.js'
       - 'tailwind.config.js'
       - 'postcss.config.js'
       - '.github/workflows/azure-static-web-apps-polite-smoke-0f9de4610.yml'
@@ -49,6 +50,13 @@ jobs:
         uses: Azure/static-web-apps-deploy@v1
         env:
           VITE_API_URL: ${{ secrets.VITE_API_URL }}
+          VITE_SENTRY_DSN: ${{ secrets.VITE_SENTRY_DSN }}
+          VITE_SENTRY_ENVIRONMENT: production
+          VITE_APP_VERSION: ${{ secrets.SENTRY_RELEASE }}
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
+          SENTRY_RELEASE: ${{ secrets.SENTRY_RELEASE }}
         with:
           azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_POLITE_SMOKE_0F9DE4610 }}
           action: "upload"

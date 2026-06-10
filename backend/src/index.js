@@ -1,3 +1,4 @@
+import * as Sentry from '@sentry/node';
 import express from 'express';
 import cors from 'cors';
 import crypto from 'node:crypto';
@@ -1618,6 +1619,8 @@ app.delete('/api/:resource/:id', requireAuth, async (req, res) => {
 });
 
 app.use((_req, res) => sendError(res, 404, 'Route not found'));
+
+Sentry.setupExpressErrorHandler(app);
 
 app.listen(env.port, '0.0.0.0', async () => {
   try {

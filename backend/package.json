@@ -3,8 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "node --watch src/index.js",
-    "start": "node src/index.js",
+    "dev": "node --import ./instrument.js --watch src/index.js",
+    "start": "node --import ./instrument.js src/index.js",
     "prisma:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:push": "prisma db push",
@@ -14,6 +14,7 @@
     "@base44/sdk": "^0.8.30",
     "@prisma/adapter-pg": "^6.15.0",
     "@prisma/client": "^6.15.0",
+    "@sentry/node": "^10.57.0",
     "bcryptjs": "^3.0.2",
     "cors": "^2.8.5",
     "dotenv": "^17.2.1",
