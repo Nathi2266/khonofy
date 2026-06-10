@@ -1,0 +1,22 @@
+name: Deploy frontend and backend on deploy branch
+
+on:
+  push:
+    branches:
+      - deploy
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-azure-${{ github.repository }}-deploy
+  cancel-in-progress: true
+
+jobs:
+  deploy-frontend:
+    name: Deploy frontend to Azure Static Web Apps
+    uses: ./.github/workflows/azure-static-web-apps-polite-smoke-0f9de4610.yml
+    secrets: inherit
+
+  deploy-backend:
+    name: Deploy backend to Azure Web App
+    uses: ./.github/workflows/deploy_khonofy-backend-api.yml
+    secrets: inherit
