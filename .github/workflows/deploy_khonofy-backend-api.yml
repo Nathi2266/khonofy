@@ -4,10 +4,10 @@
 name: Build and deploy Node.js app to Azure Web App - khonofy-backend-api
 
 on:
+  workflow_call:
   push:
     branches:
       - main
-      - deploy
     paths:
       - 'backend/**'
       - '.github/workflows/deploy_khonofy-backend-api.yml'
