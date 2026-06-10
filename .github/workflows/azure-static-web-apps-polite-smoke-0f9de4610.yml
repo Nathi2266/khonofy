@@ -1,22 +1,11 @@
 name: Azure Static Web Apps CI/CD
 
 on:
-  workflow_call:
   workflow_dispatch:
   push:
     branches:
       - main
-    paths:
-      - 'src/**'
-      - 'public/**'
-      - 'index.html'
-      - 'package.json'
-      - 'package-lock.json'
-      - 'vite.config.js'
-      - 'src/instrument.js'
-      - 'tailwind.config.js'
-      - 'postcss.config.js'
-      - '.github/workflows/azure-static-web-apps-polite-smoke-0f9de4610.yml'
+      - deploy
   pull_request:
     types: [opened, synchronize, reopened, closed]
     branches:
