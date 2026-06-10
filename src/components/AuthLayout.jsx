@@ -88,7 +88,7 @@ export default function AuthLayout({
         </div>
 
         {footer ? (
-          <p className="text-center text-sm text-muted-foreground mt-6 select-none">{footer}</p>
+          <p className="text-center text-xs text-muted-foreground/80 mt-5 select-none">{footer}</p>
         ) : null}
       </div>
     </div>
