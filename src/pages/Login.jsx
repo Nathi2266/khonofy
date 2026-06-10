@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import * as Sentry from "@sentry/react";
 import { base44 } from "@/api/base44Client";
 import { useAuth } from "@/lib/AuthContext";
 import { getApiErrorMessage } from "@/lib/api-error";
@@ -18,6 +19,8 @@ export default function Login() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [sentryTestMessage, setSentryTestMessage] = useState("");
+  const [sentryTestLoading, setSentryTestLoading] = useState(false);
 
   useEffect(() => {
     if (authChecked && isAuthenticated) {
@@ -51,6 +54,37 @@ export default function Login() {
   const trimmedEmail = email.trim();
   const passwordValue = password;
   const isFormComplete = Boolean(trimmedEmail && passwordValue);
+
+  const handleSentryTest = async () => {
+    setSentryTestMessage("");
+    setSentryTestLoading(true);
+    try {
+      if (!Sentry.getClient()) {
+        setSentryTestMessage(
+          "Sentry is not connected. Restart the dev server after adding VITE_SENTRY_DSN to .env.local, or test on the deployed site."
+        );
+        return;
+      }
+
+      const eventId = Sentry.captureException(
+        new Error("Khonofy login page Sentry connectivity test"),
+        {
+          tags: { source: "login-page", test: "true" },
+          level: "info",
+        }
+      );
+      await Sentry.flush(2000);
+      setSentryTestMessage(
+        eventId
+          ? `Test error sent to Sentry (event ${eventId}). Check the khonofy-frontend project.`
+          : "Test error sent to Sentry. Check the khonofy-frontend project."
+      );
+    } catch {
+      setSentryTestMessage("Failed to send test error to Sentry.");
+    } finally {
+      setSentryTestLoading(false);
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -155,6 +189,24 @@ export default function Login() {
           <Button type="submit" className="w-full h-12 rounded-full font-medium bg-primary hover:bg-primary/90 text-white" disabled={loading || !isFormComplete}>
             {loading ? "Logging in..." : "LOGIN"}
           </Button>
+          <div className="space-y-2 pt-1">
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full h-10 rounded-full text-sm"
+              onClick={handleSentryTest}
+              disabled={sentryTestLoading}
+            >
+              {sentryTestLoading ? "Sending test error..." : "Test Sentry"}
+            </Button>
+            {sentryTestMessage ? (
+              <p className="text-center text-xs text-muted-foreground">{sentryTestMessage}</p>
+            ) : (
+              <p className="text-center text-xs text-muted-foreground">
+                Sends a test error to Sentry so you can verify monitoring is working.
+              </p>
+            )}
+          </div>
         </form>
       </AuthLayout>
     </>
