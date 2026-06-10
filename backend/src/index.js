@@ -1255,6 +1255,10 @@ app.use(express.json({ limit: '15mb' }));
 
 app.get('/health', (_req, res) => res.json({ ok: true }));
 
+app.get('/api/debug/sentry-test', (_req, _res) => {
+  throw new Error('Khonofy backend Sentry connectivity test');
+});
+
 app.get('/health/base44', async (_req, res) => {
   if (!isBase44Configured()) {
     return res.status(503).json({
