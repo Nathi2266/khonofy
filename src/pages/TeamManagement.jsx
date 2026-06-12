@@ -36,7 +36,7 @@ export default function TeamManagement() {
   const getMemberStats = (memberId) => {
     const memberTasks = tasks.filter(t => t.assigned_to === memberId);
     const memberTimesheets = timesheets.filter(t => t.user_id === memberId);
-    const latestSheet = memberTimesheets.sort((a, b) => new Date(b.week_start) - new Date(a.week_start))[0];
+    const latestSheet = memberTimesheets.sort((a, b) => new Date(b.week_start).getTime() - new Date(a.week_start).getTime())[0];
     const totalHours = memberTimesheets
       .filter(t => t.status === 'approved')
       .reduce((sum, t) => sum + (t.total_hours || 0), 0);

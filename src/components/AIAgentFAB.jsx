@@ -2,7 +2,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import aiAvatar from '@/assets/images/Ai_Avatar.gif';
 
-export default function AIAgentFAB({ className }) {
+export default function AIAgentFAB({ className = undefined }) {
   const navigate = useNavigate();
   const location = useLocation();
   const isActive = location.pathname === '/ai-assistant';

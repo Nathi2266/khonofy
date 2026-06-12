@@ -22,5 +22,7 @@ export function endRequest() {
 export function subscribeLoading(listener) {
   listeners.add(listener);
   listener(pendingRequests);
-  return () => listeners.delete(listener);
+  return () => {
+    listeners.delete(listener);
+  };
 }

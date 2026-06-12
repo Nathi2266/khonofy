@@ -162,7 +162,7 @@ export default function TaskManagement() {
       stats[entry.task_id].entries.push(entry);
     }
     for (const taskId of Object.keys(stats)) {
-      stats[taskId].entries.sort((a, b) => new Date(b.date) - new Date(a.date));
+      stats[taskId].entries.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     }
     return stats;
   }, [timeEntries]);

@@ -405,7 +405,7 @@ export default function TimesheetManagement() {
         <div className="rounded-xl border border-border bg-card p-5">
           <h2 className="mb-4 font-semibold text-foreground">Timesheet History</h2>
           <div className="space-y-2">
-            {timesheets.sort((left, right) => new Date(right.week_start) - new Date(left.week_start)).map((timesheet) => (
+            {timesheets.sort((left, right) => new Date(right.week_start).getTime() - new Date(left.week_start).getTime()).map((timesheet) => (
               <div key={timesheet.id} className="flex items-center justify-between rounded-lg bg-muted/40 px-4 py-3 transition-colors hover:bg-muted/60">
                 <div>
                   <p className="text-sm font-medium text-foreground">
