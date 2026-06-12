@@ -421,3 +421,5 @@ export async function generateAssistantReply({ user, messages, projects = [] }) 
     ticketDraft: normalizeTicketDraft(parsed.ticketDraft, projects),
   };
 }
+
+
