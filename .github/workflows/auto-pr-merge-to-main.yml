@@ -20,7 +20,12 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+
   promote-via-deploy:
+    needs: ci
+    if: needs.ci.result == 'success'
     runs-on: ubuntu-latest
     permissions:
       contents: write

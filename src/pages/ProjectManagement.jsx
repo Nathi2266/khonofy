@@ -510,7 +510,6 @@ export default function ProjectManagement() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['clients'] });
-      setShowBulkClientDialog(false);
       setBulkClientText('');
     },
   });
@@ -533,7 +532,6 @@ export default function ProjectManagement() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['projects'] });
-      setShowBulkProjectDialog(false);
       setBulkProjectText('');
     },
   });

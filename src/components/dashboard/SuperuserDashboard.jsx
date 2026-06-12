@@ -20,7 +20,6 @@ import dashboardIcon2 from '@/assets/images/dashboard/2.png';
 import dashboardIcon3 from '@/assets/images/dashboard/3.png';
 import dashboardIcon4 from '@/assets/images/dashboard/4.png';
 import dashboardIcon20 from '@/assets/images/dashboard/20.png';
-import dashboardIcon10 from '@/assets/images/dashboard/10.png';
 import dashboardIcon11 from '@/assets/images/dashboard/11.png';
 import dashboardIcon12 from '@/assets/images/dashboard/12.png';
 import dashboardIcon13 from '@/assets/images/dashboard/13.png';
@@ -81,6 +80,7 @@ function toDayKey(date) {
   return d.toISOString().slice(0, 10);
 }
 
+/** @param {any[]} items @param {number} days @param {(item: any) => number} [valueGetter] */
 function buildDailySeries(items, days, valueGetter = () => 1) {
   const now = new Date();
   now.setHours(0, 0, 0, 0);
@@ -148,6 +148,18 @@ function MiniSparkline({ data, tone = 'primary' }) {
   );
 }
 
+/**
+ * @param {object} props
+ * @param {string} props.label
+ * @param {any} props.value
+ * @param {import('react').ComponentType<{ className?: string }>} [props.icon]
+ * @param {string} [props.iconSrc]
+ * @param {number[]} [props.series]
+ * @param {string} [props.tone]
+ * @param {{ label: string; positive: boolean }} [props.trend]
+ * @param {string} [props.note]
+ * @param {boolean} [props.featured]
+ */
 function KpiCard({ label, value, icon: Icon, iconSrc, series, tone = 'primary', trend, note, featured = false }) {
   const theme = KPI_TONES[tone] || KPI_TONES.primary;
   const TrendIcon = trend?.positive ? TrendingUp : TrendingDown;
@@ -183,6 +195,14 @@ function KpiCard({ label, value, icon: Icon, iconSrc, series, tone = 'primary', 
   );
 }
 
+/**
+ * @param {object} props
+ * @param {import('react').ComponentType<{ className?: string }>} [props.icon]
+ * @param {string} [props.iconSrc]
+ * @param {string} props.title
+ * @param {string} props.description
+ * @param {import('react').ReactNode} [props.action]
+ */
 function SectionHeader({ icon: Icon, iconSrc, title, description, action }) {
   return (
     <div className="mb-4 flex items-start justify-between gap-4">
@@ -202,6 +222,12 @@ function SectionHeader({ icon: Icon, iconSrc, title, description, action }) {
   );
 }
 
+/**
+ * @param {object} props
+ * @param {import('react').ComponentType<{ className?: string }>} props.icon
+ * @param {string} props.title
+ * @param {string} props.description
+ */
 function EmptyState({ icon: Icon, title, description }) {
   return (
     <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-muted/20 px-6 py-10 text-center">

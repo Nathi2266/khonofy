@@ -61,7 +61,7 @@ function shouldCaptureHttpStatus(status) {
   return status === 408 || status === 429;
 }
 
-export function captureApiError(error, { method, path, status, apiBase, hint } = {}) {
+export function captureApiError(error, { method, path, status, apiBase, hint } = /** @type {any} */ ({})) {
   if (!SENTRY_ENABLED) return;
   if (!error) return;
 

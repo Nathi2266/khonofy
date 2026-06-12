@@ -1,5 +1,5 @@
 import { Calendar } from 'lucide-react';
-import DashboardIcon, { DASHBOARD_ICON_SIZES } from '@/components/DashboardIcon';
+import DashboardIcon from '@/components/DashboardIcon';
 import dashboardIcon1 from '@/assets/images/dashboard/1.png';
 import dashboardIcon5 from '@/assets/images/dashboard/5.png';
 

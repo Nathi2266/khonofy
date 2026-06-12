@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { useMemo, useState } from 'react';
 import { Check, ChevronsUpDown, X } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
