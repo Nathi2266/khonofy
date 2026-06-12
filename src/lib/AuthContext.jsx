@@ -1,5 +1,6 @@
 import React, { createContext, useState, useContext, useEffect, useCallback, useMemo } from 'react';
 import { base44 } from '@/api/base44Client';
+import { clearAuthToken, getAuthToken } from '@/lib/auth-storage';
 import {
   captureException as captureSentryException,
   clearUser as clearSentryUser,
@@ -20,6 +21,15 @@ export const AuthProvider = ({ children }) => {
   const checkUserAuth = useCallback(async () => {
     try {
       setAuthError(null);
+      if (!getAuthToken()) {
+        setUser(null);
+        setIsAuthenticated(false);
+        setAuthChecked(true);
+        setIsLoadingAuth(false);
+        clearSentryUser();
+        return;
+      }
+
       const currentUser = await base44.auth.me();
       setUser(currentUser);
       setIsAuthenticated(true);
@@ -40,7 +50,9 @@ export const AuthProvider = ({ children }) => {
       setIsLoadingAuth(false);
       clearSentryUser();
       const status = error?.status ?? error?.response?.status;
-      if (status !== 401 && status !== 403) {
+      if (status === 401 || status === 403) {
+        clearAuthToken();
+      } else if (status !== 401 && status !== 403) {
         captureSentryException(error, {
           tags: { area: 'auth' },
           extra: { status },
