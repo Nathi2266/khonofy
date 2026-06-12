@@ -3,6 +3,20 @@ import { env } from '../config/env.js';
 // CI/CD pipeline test: backend deploy flow via deploy branch (workflow dispatch).
 const VALID_PRIORITIES = new Set(['low', 'medium', 'high', 'urgent']);
 
+function upstreamStatusToHttpStatus(upstreamStatus) {
+  if (upstreamStatus === 408 || upstreamStatus === 429) return upstreamStatus;
+  return 502;
+}
+
+function dependencyError(message, { statusCode = 502, dependency = 'dependency', extra = {}, cause } = {}) {
+  const error = cause ? new Error(message, { cause }) : new Error(message);
+  error.statusCode = statusCode;
+  error.isDependencyError = true;
+  error.dependency = dependency;
+  error.dependencyContext = extra;
+  return error;
+}
+
 function normalizeText(value) {
   return String(value || '').trim();
 }
@@ -113,7 +127,16 @@ function normalizeTicketDraft(ticketDraft, projects, { requireTimeframe = true }
 
 function parseJsonResponse(content) {
   const clean = stripCodeFence(content);
-  return JSON.parse(clean);
+  try {
+    return JSON.parse(clean);
+  } catch (error) {
+    throw dependencyError('AI response was not valid JSON', {
+      statusCode: 502,
+      dependency: 'azure_openai',
+      extra: { responseLength: String(clean || '').length },
+      cause: error,
+    });
+  }
 }
 
 function buildVoiceTicketSystemPrompt(user, projects) {
@@ -169,39 +192,73 @@ function buildVoiceTicketSystemPrompt(user, projects) {
 
 async function callAzureJsonChat({ systemPrompt, userContent, temperature = 0.2, maxTokens = 1200 }) {
   if (!isAiConfigured()) {
-    throw new Error('AI assistant is not configured on the server');
+    throw dependencyError('AI assistant is not configured on the server', {
+      statusCode: 503,
+      dependency: 'azure_openai_config',
+    });
   }
 
   const endpoint = env.azureOpenAiEndpoint.replace(/\/$/, '');
-  const response = await fetch(
-    `${endpoint}/openai/deployments/${encodeURIComponent(env.azureOpenAiModel)}/chat/completions?api-version=${encodeURIComponent(env.azureOpenAiApiVersion)}`,
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'api-key': env.azureOpenAiApiKey,
+  const requestUrl = `${endpoint}/openai/deployments/${encodeURIComponent(env.azureOpenAiModel)}/chat/completions?api-version=${encodeURIComponent(env.azureOpenAiApiVersion)}`;
+
+  let response;
+  try {
+    response = await fetch(
+      requestUrl,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'api-key': env.azureOpenAiApiKey,
+        },
+        body: JSON.stringify({
+          temperature,
+          max_completion_tokens: maxTokens,
+          response_format: { type: 'json_object' },
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userContent },
+          ],
+        }),
       },
-      body: JSON.stringify({
-        temperature,
-        max_completion_tokens: maxTokens,
-        response_format: { type: 'json_object' },
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userContent },
-        ],
-      }),
-    },
-  );
+    );
+  } catch (error) {
+    throw dependencyError('Azure OpenAI request failed', {
+      statusCode: 502,
+      dependency: 'azure_openai',
+      extra: {
+        deployment: env.azureOpenAiModel,
+        apiVersion: env.azureOpenAiApiVersion,
+      },
+      cause: error,
+    });
+  }
 
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
     const message = data?.error?.message || data?.message || 'Azure OpenAI request failed';
-    throw new Error(message);
+    throw dependencyError(message, {
+      statusCode: upstreamStatusToHttpStatus(response.status),
+      dependency: 'azure_openai',
+      extra: {
+        upstreamStatus: response.status,
+        deployment: env.azureOpenAiModel,
+        apiVersion: env.azureOpenAiApiVersion,
+      },
+    });
   }
 
   const content = data?.choices?.[0]?.message?.content;
   if (!content) {
-    throw new Error('No AI response content received');
+    throw dependencyError('No AI response content received', {
+      statusCode: 502,
+      dependency: 'azure_openai',
+      extra: {
+        upstreamStatus: response.status,
+        deployment: env.azureOpenAiModel,
+        apiVersion: env.azureOpenAiApiVersion,
+      },
+    });
   }
 
   return parseJsonResponse(content);
@@ -266,7 +323,10 @@ export async function parseUsersFromImportDocument({
   imageMimeType = '',
 }) {
   if (!isAiConfigured()) {
-    throw new Error('AI assistant is not configured on the server');
+    throw dependencyError('AI assistant is not configured on the server', {
+      statusCode: 503,
+      dependency: 'azure_openai_config',
+    });
   }
 
   const hasImage = Boolean(imageBase64 && imageMimeType);
@@ -276,6 +336,7 @@ export async function parseUsersFromImportDocument({
   }
 
   const endpoint = env.azureOpenAiEndpoint.replace(/\/$/, '');
+  const requestUrl = `${endpoint}/openai/deployments/${encodeURIComponent(env.azureOpenAiModel)}/chat/completions?api-version=${encodeURIComponent(env.azureOpenAiApiVersion)}`;
   const userMessage = hasImage
     ? {
         role: 'user',
@@ -304,35 +365,64 @@ export async function parseUsersFromImportDocument({
         ].filter(Boolean).join('\n\n'),
       };
 
-  const response = await fetch(
-    `${endpoint}/openai/deployments/${encodeURIComponent(env.azureOpenAiModel)}/chat/completions?api-version=${encodeURIComponent(env.azureOpenAiApiVersion)}`,
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'api-key': env.azureOpenAiApiKey,
+  let response;
+  try {
+    response = await fetch(
+      requestUrl,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'api-key': env.azureOpenAiApiKey,
+        },
+        body: JSON.stringify({
+          temperature: 0.1,
+          max_completion_tokens: 4000,
+          response_format: { type: 'json_object' },
+          messages: [
+            { role: 'system', content: buildUserImportPrompt() },
+            userMessage,
+          ],
+        }),
       },
-      body: JSON.stringify({
-        temperature: 0.1,
-        max_completion_tokens: 4000,
-        response_format: { type: 'json_object' },
-        messages: [
-          { role: 'system', content: buildUserImportPrompt() },
-          userMessage,
-        ],
-      }),
-    },
-  );
+    );
+  } catch (error) {
+    throw dependencyError('Azure OpenAI request failed', {
+      statusCode: 502,
+      dependency: 'azure_openai',
+      extra: {
+        deployment: env.azureOpenAiModel,
+        apiVersion: env.azureOpenAiApiVersion,
+      },
+      cause: error,
+    });
+  }
 
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
     const message = data?.error?.message || data?.message || 'Azure OpenAI request failed';
-    throw new Error(message);
+    throw dependencyError(message, {
+      statusCode: upstreamStatusToHttpStatus(response.status),
+      dependency: 'azure_openai',
+      extra: {
+        upstreamStatus: response.status,
+        deployment: env.azureOpenAiModel,
+        apiVersion: env.azureOpenAiApiVersion,
+      },
+    });
   }
 
   const content = data?.choices?.[0]?.message?.content;
   if (!content) {
-    throw new Error('No AI response content received');
+    throw dependencyError('No AI response content received', {
+      statusCode: 502,
+      dependency: 'azure_openai',
+      extra: {
+        upstreamStatus: response.status,
+        deployment: env.azureOpenAiModel,
+        apiVersion: env.azureOpenAiApiVersion,
+      },
+    });
   }
 
   const parsed = parseJsonResponse(content);
@@ -378,39 +468,73 @@ export async function generateVoiceTicketDraft({ user, transcript, projects = []
 
 export async function generateAssistantReply({ user, messages, projects = [] }) {
   if (!isAiConfigured()) {
-    throw new Error('AI assistant is not configured on the server');
+    throw dependencyError('AI assistant is not configured on the server', {
+      statusCode: 503,
+      dependency: 'azure_openai_config',
+    });
   }
 
   const endpoint = env.azureOpenAiEndpoint.replace(/\/$/, '');
-  const response = await fetch(
-    `${endpoint}/openai/deployments/${encodeURIComponent(env.azureOpenAiModel)}/chat/completions?api-version=${encodeURIComponent(env.azureOpenAiApiVersion)}`,
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'api-key': env.azureOpenAiApiKey,
+  const requestUrl = `${endpoint}/openai/deployments/${encodeURIComponent(env.azureOpenAiModel)}/chat/completions?api-version=${encodeURIComponent(env.azureOpenAiApiVersion)}`;
+
+  let response;
+  try {
+    response = await fetch(
+      requestUrl,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'api-key': env.azureOpenAiApiKey,
+        },
+        body: JSON.stringify({
+          temperature: 0.3,
+          max_completion_tokens: 1200,
+          response_format: { type: 'json_object' },
+          messages: [
+            { role: 'system', content: buildSystemPrompt(user, projects) },
+            ...normalizeMessages(messages),
+          ],
+        }),
+      }
+    );
+  } catch (error) {
+    throw dependencyError('Azure OpenAI request failed', {
+      statusCode: 502,
+      dependency: 'azure_openai',
+      extra: {
+        deployment: env.azureOpenAiModel,
+        apiVersion: env.azureOpenAiApiVersion,
       },
-      body: JSON.stringify({
-        temperature: 0.3,
-        max_completion_tokens: 1200,
-        response_format: { type: 'json_object' },
-        messages: [
-          { role: 'system', content: buildSystemPrompt(user, projects) },
-          ...normalizeMessages(messages),
-        ],
-      }),
-    }
-  );
+      cause: error,
+    });
+  }
 
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
     const message = data?.error?.message || data?.message || 'Azure OpenAI request failed';
-    throw new Error(message);
+    throw dependencyError(message, {
+      statusCode: upstreamStatusToHttpStatus(response.status),
+      dependency: 'azure_openai',
+      extra: {
+        upstreamStatus: response.status,
+        deployment: env.azureOpenAiModel,
+        apiVersion: env.azureOpenAiApiVersion,
+      },
+    });
   }
 
   const content = data?.choices?.[0]?.message?.content;
   if (!content) {
-    throw new Error('No AI response content received');
+    throw dependencyError('No AI response content received', {
+      statusCode: 502,
+      dependency: 'azure_openai',
+      extra: {
+        upstreamStatus: response.status,
+        deployment: env.azureOpenAiModel,
+        apiVersion: env.azureOpenAiApiVersion,
+      },
+    });
   }
 
   const parsed = parseJsonResponse(content);

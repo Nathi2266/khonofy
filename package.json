@@ -1,7 +1,7 @@
 {
   "name": "khonofy-app",
   "private": true,
-  "version": "1.0.22",
+  "version": "1.0.23",
   "type": "module",
   "scripts": {
     "dev": "concurrently -n backend,frontend -c cyan,green \"npm run dev --prefix backend\" \"vite\"",
@@ -11,7 +11,9 @@
     "lint": "eslint . --quiet",
     "lint:fix": "eslint . --fix",
     "typecheck": "tsc -p ./jsconfig.json",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "ui-scale": "node scripts/set-ui-scale.js",
+    "ui-scale:show": "node scripts/set-ui-scale.js show"
   },
   "dependencies": {
     "@base44/sdk": "^0.8.30",
