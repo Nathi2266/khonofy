@@ -20,11 +20,12 @@ on:
       - 'package-lock.json'
       - 'scripts/**'
       - '.github/workflows/azure-static-web-apps-polite-smoke-0f9de4610.yml'
+  # PR previews only for human-opened PRs to main.
+  # deploy branch uses workflow_dispatch after auto-merge (bot PRs skip approval).
   pull_request:
     types: [opened, synchronize, reopened, closed]
     branches:
       - main
-      - deploy
     paths:
       - 'src/**'
       - 'public/**'
@@ -41,7 +42,7 @@ on:
 
 jobs:
   set-app-version:
-    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.event.action != 'closed')
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.event.action != 'closed' && github.event.pull_request.user.login != 'github-actions[bot]')
     runs-on: ubuntu-latest
     name: Set app version
     outputs:
@@ -61,7 +62,7 @@ jobs:
 
   build_and_deploy_job:
     needs: set-app-version
-    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.event.action != 'closed')
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.event.action != 'closed' && github.event.pull_request.user.login != 'github-actions[bot]')
     runs-on: ubuntu-latest
     name: Build and Deploy Job
     permissions:
@@ -219,7 +220,7 @@ jobs:
           echo "Merged PR #${EXISTING_PR}: deploy -> main"
 
   close_pull_request_job:
-    if: github.event_name == 'pull_request' && github.event.action == 'closed'
+    if: github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.user.login != 'github-actions[bot]'
     runs-on: ubuntu-latest
     name: Close Pull Request Job
     steps:
