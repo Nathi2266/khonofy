@@ -1,0 +1,6 @@
+{
+  "defaultScale": 0.85,
+  "minScale": 0.6,
+  "maxScale": 1,
+  "step": 0.05
+}

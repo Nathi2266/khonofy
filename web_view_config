@@ -1,0 +1,17 @@
+# Set default view to 75%
+
+npm run ui-scale -- 75
+
+# Or with decimal
+
+npm run ui-scale -- 0.75
+
+
+# Show current settings
+
+npm run ui-scale:show
+
+
+# Set min/max/default together
+
+node scripts/set-ui-scale.js --min 60 --max 100 --default 90

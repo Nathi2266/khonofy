@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import * as Sentry from "@sentry/react";
 import { base44 } from "@/api/base44Client";
 import { useAuth } from "@/lib/AuthContext";
 import { getApiErrorMessage } from "@/lib/api-error";
@@ -22,12 +21,6 @@ export default function Login() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const [sentryTestMessage, setSentryTestMessage] = useState("");
-  const [sentryTestLoading, setSentryTestLoading] = useState(false);
-  const [backendSentryTestLoading, setBackendSentryTestLoading] = useState(false);
-
-  // @ts-ignore
-  const apiBase = (import.meta.env.VITE_API_URL || "http://localhost:3001").replace(/\/$/, "");
 
   useEffect(() => {
     if (authChecked && isAuthenticated) {
@@ -61,56 +54,6 @@ export default function Login() {
   const trimmedEmail = email.trim();
   const passwordValue = password;
   const isFormComplete = Boolean(trimmedEmail && passwordValue);
-
-  const handleBackendSentryTest = async () => {
-    setSentryTestMessage("");
-    setBackendSentryTestLoading(true);
-    try {
-      const response = await fetch(`${apiBase}/api/debug/sentry-test`);
-      if (!response.ok) {
-        setSentryTestMessage(
-          "Backend test error sent. Check your backend Sentry project for the connectivity test."
-        );
-        return;
-      }
-      setSentryTestMessage("Backend responded without an error. Sentry test may not have fired.");
-    } catch {
-      setSentryTestMessage("Could not reach the backend Sentry test endpoint.");
-    } finally {
-      setBackendSentryTestLoading(false);
-    }
-  };
-
-  const handleSentryTest = async () => {
-    setSentryTestMessage("");
-    setSentryTestLoading(true);
-    try {
-      if (!Sentry.getClient()) {
-        setSentryTestMessage(
-          "Sentry is not connected. Restart the dev server after adding VITE_SENTRY_DSN to .env.local, or test on the deployed site."
-        );
-        return;
-      }
-
-      const eventId = Sentry.captureException(
-        new Error("Khonofy login page Sentry connectivity test"),
-        {
-          tags: { source: "login-page", test: "true" },
-          level: "info",
-        }
-      );
-      await Sentry.flush(2000);
-      setSentryTestMessage(
-        eventId
-          ? `Test error sent to Sentry (event ${eventId}). Check the khonofy-frontend project.`
-          : "Test error sent to Sentry. Check the khonofy-frontend project."
-      );
-    } catch {
-      setSentryTestMessage("Failed to send test error to Sentry.");
-    } finally {
-      setSentryTestLoading(false);
-    }
-  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -216,37 +159,6 @@ export default function Login() {
           <Button type="submit" className="w-full h-12 rounded-full font-medium bg-primary hover:bg-primary/90 text-white" disabled={loading || !isFormComplete}>
             {loading ? "Logging in..." : "LOGIN"}
           </Button>
-          <div className="flex flex-col items-center gap-1 pt-1">
-            <div className="flex items-center gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-7 rounded-full px-3 text-xs"
-                onClick={handleSentryTest}
-                disabled={sentryTestLoading || backendSentryTestLoading}
-              >
-                {sentryTestLoading ? "Sending..." : "Test Frontend"}
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-7 rounded-full px-3 text-xs"
-                onClick={handleBackendSentryTest}
-                disabled={sentryTestLoading || backendSentryTestLoading}
-              >
-                {backendSentryTestLoading ? "Sending..." : "Test Backend"}
-              </Button>
-            </div>
-            {sentryTestMessage ? (
-              <p className="text-center text-[11px] text-muted-foreground">{sentryTestMessage}</p>
-            ) : (
-              <p className="text-center text-[11px] text-muted-foreground">
-                Send test errors to Sentry from the frontend or backend.
-              </p>
-            )}
-          </div>
         </form>
       </AuthLayout>
     </>
