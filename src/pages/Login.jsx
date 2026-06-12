@@ -149,7 +149,7 @@ export default function Login() {
         titleInCard
         compact
         afterCard={errorBanner}
-        footer={appVersion ? `Version ${appVersion}` : null}
+        footer={appVersion}
       >
         <form
           onSubmit={handleSubmit}
