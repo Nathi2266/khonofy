@@ -1,6 +1,6 @@
 # Docs for the Azure Web Apps Deploy action: https://github.com/Azure/webapps-deploy
 # More GitHub Actions for Azure: https://github.com/Azure/actions
-# Runs on every push to deploy (and main): backend build and Azure App Service deploy.
+# Runs on push to deploy (and main) when backend files change.
 
 name: Build and deploy Node.js app to Azure Web App - khonofy-backend-api
 
@@ -9,9 +9,36 @@ on:
     branches:
       - main
       - deploy
+    paths:
+      - 'backend/**'
+      - '.github/workflows/deploy_khonofy-backend-api.yml'
   workflow_dispatch:
 
 jobs:
+  detect-frontend-changes:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/deploy'
+    runs-on: ubuntu-latest
+    outputs:
+      frontend: ${{ steps.filter.outputs.frontend }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            frontend:
+              - 'src/**'
+              - 'public/**'
+              - 'index.html'
+              - 'vite.config.js'
+              - 'tailwind.config.js'
+              - 'postcss.config.js'
+              - 'components.json'
+              - 'jsconfig.json'
+              - 'package.json'
+              - 'package-lock.json'
+              - 'scripts/**'
+
   build:
     runs-on: ubuntu-latest
     permissions:
@@ -61,3 +88,66 @@ jobs:
           slot-name: 'Production'
           package: .
           publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_B7E4F49AD4D84AE383D97EFA095E3875 }}
+
+  promote-to-main:
+    needs: [deploy, detect-frontend-changes]
+    if: |
+      always() &&
+      needs.deploy.result == 'success' &&
+      github.event_name == 'push' &&
+      github.ref == 'refs/heads/deploy' &&
+      (
+        needs.detect-frontend-changes.result == 'skipped' ||
+        (
+          needs.detect-frontend-changes.result == 'success' &&
+          needs.detect-frontend-changes.outputs.frontend != 'true'
+        )
+      )
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Open and merge PR from deploy to main
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          AHEAD_BY="$(gh api "/repos/${GITHUB_REPOSITORY}/compare/main...deploy" --jq '.ahead_by')"
+          if [ "${AHEAD_BY}" -eq 0 ]; then
+            echo "deploy is already in sync with main."
+            exit 0
+          fi
+
+          EXISTING_PR="$(gh pr list \
+            --repo "${GITHUB_REPOSITORY}" \
+            --base main \
+            --head deploy \
+            --state open \
+            --json number \
+            --jq '.[0].number // empty')"
+
+          if [ -z "${EXISTING_PR}" ]; then
+            gh pr create \
+              --repo "${GITHUB_REPOSITORY}" \
+              --base main \
+              --head deploy \
+              --title "Release backend changes to main" \
+              --body "Automated sync after Azure backend deploy from \`deploy\`."
+
+            EXISTING_PR="$(gh pr list \
+              --repo "${GITHUB_REPOSITORY}" \
+              --base main \
+              --head deploy \
+              --state open \
+              --json number \
+              --jq '.[0].number')"
+          fi
+
+          gh pr merge "${EXISTING_PR}" \
+            --repo "${GITHUB_REPOSITORY}" \
+            --merge \
+            --delete-branch=false
+
+          echo "Merged PR #${EXISTING_PR}: deploy -> main"

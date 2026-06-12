@@ -1,4 +1,4 @@
-# Runs on every push to deploy (and main): version, frontend build, Azure deploy, then version PR to main.
+# Runs on push to deploy (and main) when frontend files change: version, build, Azure deploy, then PR to main.
 name: Azure Static Web Apps CI/CD
 
 on:
@@ -7,11 +7,37 @@ on:
     branches:
       - main
       - deploy
+    paths:
+      - 'src/**'
+      - 'public/**'
+      - 'index.html'
+      - 'vite.config.js'
+      - 'tailwind.config.js'
+      - 'postcss.config.js'
+      - 'components.json'
+      - 'jsconfig.json'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'scripts/**'
+      - '.github/workflows/azure-static-web-apps-polite-smoke-0f9de4610.yml'
   pull_request:
     types: [opened, synchronize, reopened, closed]
     branches:
       - main
       - deploy
+    paths:
+      - 'src/**'
+      - 'public/**'
+      - 'index.html'
+      - 'vite.config.js'
+      - 'tailwind.config.js'
+      - 'postcss.config.js'
+      - 'components.json'
+      - 'jsconfig.json'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'scripts/**'
+      - '.github/workflows/azure-static-web-apps-polite-smoke-0f9de4610.yml'
 
 jobs:
   set-app-version:

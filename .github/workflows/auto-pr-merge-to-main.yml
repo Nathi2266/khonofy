@@ -1,5 +1,6 @@
-# Feature branch push -> open PR to deploy -> merge into deploy.
-# Pushes to deploy then trigger frontend/backend Azure workflows separately.
+# Feature branch push -> open PR into deploy -> auto-merge.
+# Merge into deploy triggers backend and/or frontend Azure workflows (path-filtered).
+# After deploy completes, deploy is promoted to main via PR (in those workflows).
 name: Auto PR merge to deploy
 
 on:
