@@ -1,3 +1,4 @@
+# Runs on push to deploy (and main) when frontend files change: version, build, Azure deploy, then PR to main.
 name: Azure Static Web Apps CI/CD
 
 on:
@@ -6,15 +7,64 @@ on:
     branches:
       - main
       - deploy
+    paths:
+      - 'src/**'
+      - 'public/**'
+      - 'index.html'
+      - 'vite.config.js'
+      - 'tailwind.config.js'
+      - 'postcss.config.js'
+      - 'components.json'
+      - 'jsconfig.json'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'scripts/**'
+      - '.github/workflows/azure-static-web-apps-polite-smoke-0f9de4610.yml'
+  # PR previews only for human-opened PRs to main.
+  # deploy branch uses workflow_dispatch after auto-merge (bot PRs skip approval).
   pull_request:
     types: [opened, synchronize, reopened, closed]
     branches:
       - main
-      - deploy
+    paths:
+      - 'src/**'
+      - 'public/**'
+      - 'index.html'
+      - 'vite.config.js'
+      - 'tailwind.config.js'
+      - 'postcss.config.js'
+      - 'components.json'
+      - 'jsconfig.json'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'scripts/**'
+      - '.github/workflows/azure-static-web-apps-polite-smoke-0f9de4610.yml'
 
 jobs:
+  set-app-version:
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.event.action != 'closed' && github.event.pull_request.user.login != 'github-actions[bot]')
+    runs-on: ubuntu-latest
+    name: Set app version
+    outputs:
+      app_version: ${{ steps.version.outputs.app_version }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Generate build version
+        id: version
+        run: |
+          SHORT_SHA="${GITHUB_SHA::7}"
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BUILD_VERSION="khonofy@1.0.pr${{ github.event.pull_request.number }}+${SHORT_SHA}"
+          else
+            SEMVER="$(node -p "require('./package.json').version")"
+            BUILD_VERSION="khonofy@${SEMVER}+${SHORT_SHA}"
+          fi
+          echo "app_version=${BUILD_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "Build version: ${BUILD_VERSION}"
+
   build_and_deploy_job:
-    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.event.action != 'closed')
+    needs: set-app-version
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.event.action != 'closed' && github.event.pull_request.user.login != 'github-actions[bot]')
     runs-on: ubuntu-latest
     name: Build and Deploy Job
     permissions:
@@ -25,6 +75,9 @@ jobs:
         with:
           submodules: true
           lfs: false
+      - name: Log build version
+        run: |
+          node -e "const p=require('./package.json'); console.log('> ' + p.name + '@' + p.version + ' build')"
       - name: Install OIDC Client from Core Package
         run: npm install @actions/core@1.6.0 @actions/http-client
       - name: Get Id Token
@@ -42,11 +95,11 @@ jobs:
           VITE_API_URL: ${{ secrets.VITE_API_URL }}
           VITE_SENTRY_DSN: ${{ secrets.VITE_SENTRY_DSN }}
           VITE_SENTRY_ENVIRONMENT: production
-          VITE_APP_VERSION: ${{ secrets.SENTRY_RELEASE }}
+          VITE_APP_VERSION: ${{ needs.set-app-version.outputs.app_version }}
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
           SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
           SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
-          SENTRY_RELEASE: ${{ secrets.SENTRY_RELEASE }}
+          SENTRY_RELEASE: ${{ needs.set-app-version.outputs.app_version }}
         with:
           azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_POLITE_SMOKE_0F9DE4610 }}
           action: "upload"
@@ -56,8 +109,69 @@ jobs:
           app_build_command: "npm run build"
           github_id_token: ${{ steps.idtoken.outputs.result }}
 
+  sync-version-to-main:
+    needs: [set-app-version, build_and_deploy_job]
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/deploy'
+    runs-on: ubuntu-latest
+    name: Sync version to main
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: deploy
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Open and merge PR from deploy to main
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          AHEAD_BY="$(gh api "/repos/${GITHUB_REPOSITORY}/compare/main...deploy" --jq '.ahead_by')"
+          if [ "${AHEAD_BY}" -eq 0 ]; then
+            echo "deploy is already in sync with main."
+            exit 0
+          fi
+
+          EXISTING_PR="$(gh pr list \
+            --repo "${GITHUB_REPOSITORY}" \
+            --base main \
+            --head deploy \
+            --state open \
+            --json number \
+            --jq '.[0].number // empty')"
+
+          if [ -z "${EXISTING_PR}" ]; then
+            gh pr create \
+              --repo "${GITHUB_REPOSITORY}" \
+              --base main \
+              --head deploy \
+              --title "Release ${{ needs.set-app-version.outputs.app_version }} to main" \
+              --body "Automated version sync after Azure frontend deploy.
+
+          Version: \`${{ needs.set-app-version.outputs.app_version }}\`"
+
+            EXISTING_PR="$(gh pr list \
+              --repo "${GITHUB_REPOSITORY}" \
+              --base main \
+              --head deploy \
+              --state open \
+              --json number \
+              --jq '.[0].number')"
+          fi
+
+          gh pr merge "${EXISTING_PR}" \
+            --repo "${GITHUB_REPOSITORY}" \
+            --merge \
+            --delete-branch=false
+
+          echo "Merged PR #${EXISTING_PR}: deploy -> main"
+
   close_pull_request_job:
-    if: github.event_name == 'pull_request' && github.event.action == 'closed'
+    if: github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.user.login != 'github-actions[bot]'
     runs-on: ubuntu-latest
     name: Close Pull Request Job
     steps:

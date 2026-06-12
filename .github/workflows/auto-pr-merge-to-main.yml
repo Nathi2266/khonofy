@@ -1,13 +1,17 @@
-name: Auto PR merge via deploy
+# Feature branch push -> open PR into deploy -> auto-merge.
+# Merge into deploy triggers backend and/or frontend Azure workflows (path-filtered).
+# After deploy completes, deploy is promoted to main via PR (in those workflows).
+name: Auto PR merge to deploy
 
 on:
   push:
     branches-ignore:
       - main
+      - deploy
   workflow_dispatch:
     inputs:
       branch:
-        description: Source branch to promote via deploy into main
+        description: Feature branch to merge into deploy
         required: true
         type: string
 
@@ -21,6 +25,7 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
+      actions: write
     steps:
       - name: Resolve source branch
         id: branch
@@ -31,8 +36,34 @@ jobs:
             echo "name=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Merge source branch into deploy
-        if: steps.branch.outputs.name != 'deploy'
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect backend and frontend changes
+        uses: dorny/paths-filter@v3
+        id: changes
+        with:
+          base: deploy
+          ref: ${{ steps.branch.outputs.name }}
+          filters: |
+            backend:
+              - 'backend/**'
+            frontend:
+              - 'src/**'
+              - 'public/**'
+              - 'index.html'
+              - 'vite.config.js'
+              - 'tailwind.config.js'
+              - 'postcss.config.js'
+              - 'components.json'
+              - 'jsconfig.json'
+              - 'package.json'
+              - 'package-lock.json'
+              - 'scripts/**'
+
+      - name: Open PR and merge into deploy
+        id: merge
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SOURCE_BRANCH: ${{ steps.branch.outputs.name }}
@@ -42,6 +73,7 @@ jobs:
 
           AHEAD_BY="$(gh api "/repos/${GITHUB_REPOSITORY}/compare/${TARGET_BRANCH}...${SOURCE_BRANCH}" --jq '.ahead_by')"
           if [ "${AHEAD_BY}" -eq 0 ]; then
+            echo "merged=false" >> "$GITHUB_OUTPUT"
             echo "No commits to merge from ${SOURCE_BRANCH} into ${TARGET_BRANCH}."
             exit 0
           fi
@@ -76,50 +108,42 @@ jobs:
             --merge \
             --delete-branch=false
 
+          echo "merged=true" >> "$GITHUB_OUTPUT"
           echo "Merged PR #${EXISTING_PR}: ${SOURCE_BRANCH} -> ${TARGET_BRANCH}"
 
-      - name: Merge deploy into main
+      - name: Bump semantic version on deploy
+        if: steps.merge.outputs.merged == 'true'
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          SOURCE_BRANCH: deploy
-          TARGET_BRANCH: main
+          GITHUB_RUN_NUMBER: ${{ github.run_number }}
+          GITHUB_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
-
-          AHEAD_BY="$(gh api "/repos/${GITHUB_REPOSITORY}/compare/${TARGET_BRANCH}...${SOURCE_BRANCH}" --jq '.ahead_by')"
-          if [ "${AHEAD_BY}" -eq 0 ]; then
-            echo "No commits to merge from ${SOURCE_BRANCH} into ${TARGET_BRANCH}."
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin deploy
+          git checkout deploy
+          git pull --ff-only origin deploy
+          node scripts/bump-app-version.js
+          git add package.json package-lock.json public/app-version.json backend/package.json
+          if git diff --staged --quiet; then
+            echo "Version files already up to date."
             exit 0
           fi
+          git commit -m "chore: bump app version to 1.0.${GITHUB_RUN_NUMBER} [skip ci]"
+          git push origin deploy
 
-          EXISTING_PR="$(gh pr list \
-            --repo "${GITHUB_REPOSITORY}" \
-            --base "${TARGET_BRANCH}" \
-            --head "${SOURCE_BRANCH}" \
-            --state open \
-            --json number \
-            --jq '.[0].number // empty')"
+      - name: Trigger backend deploy workflow
+        if: steps.merge.outputs.merged == 'true' && steps.changes.outputs.backend == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh workflow run deploy_khonofy-backend-api.yml --ref deploy
+          echo "Triggered backend deploy on deploy branch."
 
-          if [ -z "${EXISTING_PR}" ]; then
-            gh pr create \
-              --repo "${GITHUB_REPOSITORY}" \
-              --base "${TARGET_BRANCH}" \
-              --head "${SOURCE_BRANCH}" \
-              --title "Merge ${SOURCE_BRANCH} into ${TARGET_BRANCH}" \
-              --body "Automated PR promoting \`${SOURCE_BRANCH}\` into \`${TARGET_BRANCH}\`."
-
-            EXISTING_PR="$(gh pr list \
-              --repo "${GITHUB_REPOSITORY}" \
-              --base "${TARGET_BRANCH}" \
-              --head "${SOURCE_BRANCH}" \
-              --state open \
-              --json number \
-              --jq '.[0].number')"
-          fi
-
-          gh pr merge "${EXISTING_PR}" \
-            --repo "${GITHUB_REPOSITORY}" \
-            --merge \
-            --delete-branch=false
-
-          echo "Merged PR #${EXISTING_PR}: ${SOURCE_BRANCH} -> ${TARGET_BRANCH}"
+      - name: Trigger frontend deploy workflow
+        if: steps.merge.outputs.merged == 'true' && steps.changes.outputs.frontend == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh workflow run azure-static-web-apps-polite-smoke-0f9de4610.yml --ref deploy
+          echo "Triggered frontend deploy on deploy branch."

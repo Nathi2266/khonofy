@@ -9,7 +9,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Mail, Eye, EyeOff } from "lucide-react";
 import AuthLayout from "@/components/AuthLayout";
+import { getAppVersionLabel } from "@/lib/app-version";
 import khonoImage from "@/assets/images/khono.png";
+
+const appVersion = getAppVersionLabel();
 
 export default function Login() {
   const navigate = useNavigate();
@@ -146,6 +149,7 @@ export default function Login() {
         titleInCard
         compact
         afterCard={errorBanner}
+        footer={appVersion ? `Version ${appVersion}` : null}
       >
         <form
           onSubmit={handleSubmit}
