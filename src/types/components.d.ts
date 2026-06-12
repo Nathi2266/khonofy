@@ -52,6 +52,51 @@ declare module "@/components/AuthLayout" {
   export default function AuthLayout(props: AuthLayoutProps): JSX.Element;
 }
 
+declare module "@/components/StatsCard" {
+  import type { ComponentType, ReactNode } from "react";
+
+  export interface StatsCardProps {
+    label: string;
+    value?: string | number;
+    icon?: ComponentType<{ className?: string }>;
+    iconSrc?: string;
+    color?: "primary" | "green" | "amber" | "red" | "purple" | "blue" | string;
+    sub?: string;
+  }
+
+  export default function StatsCard(props: StatsCardProps): JSX.Element;
+}
+
+declare module "@/components/TaskCard" {
+  import type { ReactNode } from "react";
+
+  export interface TaskCardProps {
+    task: Record<string, any>;
+    onClick?: () => void;
+    actions?: ReactNode;
+  }
+
+  export default function TaskCard(props: TaskCardProps): JSX.Element;
+}
+
+declare module "@/components/PageLoader" {
+  export interface PageLoaderProps {
+    label?: string;
+    className?: string;
+    size?: string;
+  }
+
+  export default function PageLoader(props: PageLoaderProps): JSX.Element;
+}
+
+declare module "@/components/dashboard/SuperuserDashboard" {
+  export interface SuperuserDashboardProps {
+    user?: Record<string, any>;
+  }
+
+  export default function SuperuserDashboard(props?: SuperuserDashboardProps): JSX.Element;
+}
+
 declare module "@/components/ui/checkbox" {
   import type * as React from "react";
 
