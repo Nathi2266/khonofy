@@ -25,6 +25,7 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
+      actions: write
     steps:
       - name: Resolve source branch
         id: branch
@@ -34,6 +35,32 @@ jobs:
           else
             echo "name=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
           fi
+
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect backend and frontend changes
+        uses: dorny/paths-filter@v3
+        id: changes
+        with:
+          base: deploy
+          ref: ${{ steps.branch.outputs.name }}
+          filters: |
+            backend:
+              - 'backend/**'
+            frontend:
+              - 'src/**'
+              - 'public/**'
+              - 'index.html'
+              - 'vite.config.js'
+              - 'tailwind.config.js'
+              - 'postcss.config.js'
+              - 'components.json'
+              - 'jsconfig.json'
+              - 'package.json'
+              - 'package-lock.json'
+              - 'scripts/**'
 
       - name: Open PR and merge into deploy
         env:
@@ -80,3 +107,19 @@ jobs:
             --delete-branch=false
 
           echo "Merged PR #${EXISTING_PR}: ${SOURCE_BRANCH} -> ${TARGET_BRANCH}"
+
+      - name: Trigger backend deploy workflow
+        if: steps.changes.outputs.backend == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh workflow run deploy_khonofy-backend-api.yml --ref deploy
+          echo "Triggered backend deploy on deploy branch."
+
+      - name: Trigger frontend deploy workflow
+        if: steps.changes.outputs.frontend == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh workflow run azure-static-web-apps-polite-smoke-0f9de4610.yml --ref deploy
+          echo "Triggered frontend deploy on deploy branch."
