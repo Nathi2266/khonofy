@@ -40,3 +40,4 @@ writeJson('public/app-version.json', {
 });
 
 console.log(`khonofy-app@${semver} (${full})`);
+//checking version bump is working fine 
