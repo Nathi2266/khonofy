@@ -48,6 +48,7 @@ jobs:
     outputs:
       app_version: ${{ steps.version.outputs.app_version }}
     steps:
+      - uses: actions/checkout@v4
       - name: Generate build version
         id: version
         run: |
@@ -55,7 +56,8 @@ jobs:
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             BUILD_VERSION="khonofy@1.0.pr${{ github.event.pull_request.number }}+${SHORT_SHA}"
           else
-            BUILD_VERSION="khonofy@1.0.${GITHUB_RUN_NUMBER}+${SHORT_SHA}"
+            SEMVER="$(node -p "require('./package.json').version")"
+            BUILD_VERSION="khonofy@${SEMVER}+${SHORT_SHA}"
           fi
           echo "app_version=${BUILD_VERSION}" >> "$GITHUB_OUTPUT"
           echo "Build version: ${BUILD_VERSION}"
@@ -73,6 +75,9 @@ jobs:
         with:
           submodules: true
           lfs: false
+      - name: Log build version
+        run: |
+          node -e "const p=require('./package.json'); console.log('> ' + p.name + '@' + p.version + ' build')"
       - name: Install OIDC Client from Core Package
         run: npm install @actions/core@1.6.0 @actions/http-client
       - name: Get Id Token
@@ -118,60 +123,6 @@ jobs:
           ref: deploy
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Configure git
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-      - name: Write version files
-        env:
-          APP_VERSION: ${{ needs.set-app-version.outputs.app_version }}
-          BUILD_NUMBER: ${{ github.run_number }}
-          SHORT_SHA: ${{ github.sha }}
-        run: |
-          set -euo pipefail
-          export DISPLAY_VERSION="${APP_VERSION#khonofy@}"
-          export SEMVER="1.0.${BUILD_NUMBER}"
-          export UPDATED_AT="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
-
-          node <<'NODE'
-          const fs = require('fs');
-          const displayVersion = process.env.DISPLAY_VERSION;
-          const semver = process.env.SEMVER;
-          const appVersion = process.env.APP_VERSION;
-          const buildNumber = Number(process.env.BUILD_NUMBER);
-          const shortSha = process.env.SHORT_SHA.slice(0, 7);
-          const updatedAt = process.env.UPDATED_AT;
-
-          const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
-          pkg.version = semver;
-          fs.writeFileSync('package.json', `${JSON.stringify(pkg, null, 2)}\n`);
-
-          const versionFile = {
-            version: displayVersion,
-            full: appVersion,
-            build: buildNumber,
-            sha: shortSha,
-            updatedAt,
-          };
-          fs.writeFileSync('public/app-version.json', `${JSON.stringify(versionFile, null, 2)}\n`);
-          NODE
-
-      - name: Commit version bump to deploy
-        id: commit
-        run: |
-          set -euo pipefail
-          if git diff --quiet package.json public/app-version.json; then
-            echo "changed=false" >> "$GITHUB_OUTPUT"
-            echo "Version files already up to date."
-            exit 0
-          fi
-
-          git add package.json public/app-version.json
-          git commit -m "chore: bump app version to ${{ needs.set-app-version.outputs.app_version }} [skip ci]"
-          git push origin deploy
-          echo "changed=true" >> "$GITHUB_OUTPUT"
 
       - name: Open and merge PR from deploy to main
         env:

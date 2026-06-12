@@ -47,6 +47,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Log app version
+        run: |
+          node -e "const v=require('./public/app-version.json'); console.log('Deploying backend release', v.full || v.version)"
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
@@ -61,6 +65,9 @@ jobs:
       - name: Generate Prisma client
         run: npx prisma generate
         working-directory: backend
+
+      - name: Attach app version to backend package
+        run: cp public/app-version.json backend/app-version.json
 
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v4
