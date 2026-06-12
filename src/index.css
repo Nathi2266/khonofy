@@ -104,6 +104,15 @@
 }
 
 /* === Global background images === */
+html {
+  min-height: 100%;
+  background-color: #f5f7fb;
+}
+
+html.dark {
+  background-color: #111111;
+}
+
 html,
 body {
   height: 100%;
@@ -119,7 +128,7 @@ body {
 body {
   background-image: url('./assets/images/light_mode_bg.png');
   background-size: cover;
-  background-position: center center;
+  background-position: center bottom;
   background-repeat: no-repeat;
   background-attachment: fixed;
   background-color: #f5f7fb;
@@ -127,6 +136,7 @@ body {
 
 .dark body {
   background-image: url('./assets/images/dark_mode.png');
+  background-position: center center;
   background-color: #111111;
 }
 
