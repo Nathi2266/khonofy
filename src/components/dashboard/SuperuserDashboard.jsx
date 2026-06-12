@@ -20,7 +20,6 @@ import dashboardIcon2 from '@/assets/images/dashboard/2.png';
 import dashboardIcon3 from '@/assets/images/dashboard/3.png';
 import dashboardIcon4 from '@/assets/images/dashboard/4.png';
 import dashboardIcon20 from '@/assets/images/dashboard/20.png';
-import dashboardIcon10 from '@/assets/images/dashboard/10.png';
 import dashboardIcon11 from '@/assets/images/dashboard/11.png';
 import dashboardIcon12 from '@/assets/images/dashboard/12.png';
 import dashboardIcon13 from '@/assets/images/dashboard/13.png';
