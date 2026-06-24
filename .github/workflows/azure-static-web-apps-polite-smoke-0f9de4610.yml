@@ -124,7 +124,7 @@ jobs:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Open and merge PR from deploy to main
+      - name: Open PR from deploy to main
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -145,7 +145,7 @@ jobs:
             --jq '.[0].number // empty')"
 
           if [ -z "${EXISTING_PR}" ]; then
-            gh pr create \
+            PR_URL="$(gh pr create \
               --repo "${GITHUB_REPOSITORY}" \
               --base main \
               --head deploy \
@@ -153,22 +153,15 @@ jobs:
               --body "Automated version sync after Azure frontend deploy.
 
           Version: \`${{ needs.set-app-version.outputs.app_version }}\`"
-
-            EXISTING_PR="$(gh pr list \
+            )"
+            echo "Created PR: ${PR_URL}"
+          else
+            PR_URL="$(gh pr view "${EXISTING_PR}" \
               --repo "${GITHUB_REPOSITORY}" \
-              --base main \
-              --head deploy \
-              --state open \
-              --json number \
-              --jq '.[0].number')"
+              --json url \
+              --jq '.url')"
+            echo "Existing PR: ${PR_URL}"
           fi
-
-          gh pr merge "${EXISTING_PR}" \
-            --repo "${GITHUB_REPOSITORY}" \
-            --merge \
-            --delete-branch=false
-
-          echo "Merged PR #${EXISTING_PR}: deploy -> main"
 
   close_pull_request_job:
     if: github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.user.login != 'github-actions[bot]'
