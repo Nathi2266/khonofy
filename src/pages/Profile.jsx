@@ -322,8 +322,8 @@ export default function Profile() {
 
     setUploadingPhoto(true);
     try {
-      const auth = imageKitConfig || (await base44.media.imagekitAuth());
-      if (!imageKitConfig) setImageKitConfig(auth);
+      const auth = await base44.media.imagekitAuth();
+      setImageKitConfig(auth);
       if (!auth?.publicKey || !auth?.signature || !auth?.token || !auth?.expire || !auth?.urlEndpoint) {
         throw new Error('Photo upload is not available right now. Please try again later.');
       }
@@ -441,7 +441,7 @@ export default function Profile() {
                 <Phone className="w-4 h-4 text-muted-foreground" /> Phone Number
               </label>
               <Input
-                placeholder="+27 81 471 9966"
+                placeholder="+27 81 471 6754"
                 value={form.phone}
                 onChange={(e) => {
                   setForm({ ...form, phone: e.target.value });
@@ -681,4 +681,4 @@ export default function Profile() {
       </Dialog>
     </PageShell>
   );
-}//lick
+}
