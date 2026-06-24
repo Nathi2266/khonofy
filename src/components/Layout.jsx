@@ -17,6 +17,7 @@ import sidebarIcon6 from '@/assets/images/side_bar/6.png';
 import sidebarIcon7 from '@/assets/images/side_bar/7.png';
 import sidebarIcon8 from '@/assets/images/side_bar/8.png';
 import sidebarIcon9 from '@/assets/images/side_bar/9.png';
+import profileIcon from '@/assets/images/side_bar/8.png';
 
 const SIDEBAR_ICON_CLASS = 'w-10 h-10 flex-shrink-0 object-contain';
 
@@ -73,6 +74,10 @@ function SidebarNavIcon({ iconSrc, shouldPulse = false, className = '' }) {
   );
 }
 
+function getUserAvatarSrc(user) {
+  return user?.profile_image_url || '';
+}
+
 function navLinkClass(active) {
   return cn(
     'group flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 ease-out',
@@ -108,6 +113,7 @@ export default function Layout() {
   });
 
   const showTimesheetReviewBadge = isAdmin && !onTimesheetReview && timesheetReviewCount > 0;
+  const userAvatarSrc = getUserAvatarSrc(user);
 
   const triggerNavLoad = (path) => {
     setSpinningPath(path);
@@ -173,13 +179,23 @@ export default function Layout() {
 
           <Link
             to="/profile"
-            className={navLinkClass(location.pathname === '/profile')}
+            className={cn(navLinkClass(location.pathname === '/profile'), 'focus:outline-none focus-visible:outline-none')}
             onClick={() => triggerNavLoad('/profile')}
           >
-            <SidebarNavIcon
-              iconSrc={sidebarIcon8}
-              shouldPulse={isIconPulsing('/profile')}
-            />
+            {userAvatarSrc ? (
+              <img
+                src={userAvatarSrc}
+                alt={user?.full_name || 'Profile photo'}
+                className="h-10 w-10 flex-shrink-0 rounded-full object-cover"
+              />
+            ) : (
+              <img
+                src={profileIcon}
+                alt=""
+                aria-hidden="true"
+                className="h-10 w-10 flex-shrink-0 object-contain"
+              />
+            )}
             <span className="text-sm font-bold">Profile</span>
           </Link>
         </nav>
