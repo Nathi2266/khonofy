@@ -1718,4 +1718,3 @@ app.listen(env.port, '0.0.0.0', async () => {
   console.log(`Backend running at http://localhost:${env.port}`);
   console.log(`Frontend should run at ${env.frontendUrl}`);
 });
-//testing ci
