@@ -115,7 +115,7 @@ jobs:
       contents: write
       pull-requests: write
     steps:
-      - name: Open and merge PR from deploy to main
+      - name: Open PR from deploy to main
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -136,25 +136,18 @@ jobs:
             --jq '.[0].number // empty')"
 
           if [ -z "${EXISTING_PR}" ]; then
-            gh pr create \
+            PR_URL="$(gh pr create \
               --repo "${GITHUB_REPOSITORY}" \
               --base main \
               --head deploy \
               --title "Release backend changes to main" \
               --body "Automated sync after Azure backend deploy from \`deploy\`."
-
-            EXISTING_PR="$(gh pr list \
+            )"
+            echo "Created PR: ${PR_URL}"
+          else
+            PR_URL="$(gh pr view "${EXISTING_PR}" \
               --repo "${GITHUB_REPOSITORY}" \
-              --base main \
-              --head deploy \
-              --state open \
-              --json number \
-              --jq '.[0].number')"
+              --json url \
+              --jq '.url')"
+            echo "Existing PR: ${PR_URL}"
           fi
-
-          gh pr merge "${EXISTING_PR}" \
-            --repo "${GITHUB_REPOSITORY}" \
-            --merge \
-            --delete-branch=false
-
-          echo "Merged PR #${EXISTING_PR}: deploy -> main"
