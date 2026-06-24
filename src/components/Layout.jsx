@@ -2,6 +2,7 @@ import { Link, useLocation, Outlet } from 'react-router-dom';
 import { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
+import { useAuth } from '@/lib/AuthContext';
 import { GLOBAL_LOADING_MIN_MS, useGlobalLoadingVisible } from '@/hooks/useGlobalLoading';
 import { useLoading } from '@/lib/LoadingContext';
 import { base44 } from '@/api/base44Client';
@@ -17,8 +18,7 @@ import sidebarIcon6 from '@/assets/images/side_bar/6.png';
 import sidebarIcon7 from '@/assets/images/side_bar/7.png';
 import sidebarIcon9 from '@/assets/images/side_bar/9.png';
 import profileIcon from '@/assets/images/side_bar/8.png';
-import { Send, ChevronDown, ChevronLeft, ChevronRight, Undo2, RotateCcw } from 'lucide-react';
-import { toast } from '@/components/ui/use-toast';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 const SIDEBAR_ICON_CLASS = 'w-10 h-10 flex-shrink-0 object-contain';
 const REVOKE_WINDOW_MS = 24 * 60 * 60 * 1000;
@@ -94,6 +94,7 @@ function navLinkClass(active, collapsed = false) {
 export default function Layout() {
   const location = useLocation();
   const { data: user } = useCurrentUser();
+  const { logout } = useAuth();
   const role = user?.role || 'staff';
   const navItems = getNavItems(role);
   const [showLogoutDialog, setShowLogoutDialog] = useState(false);
@@ -169,12 +170,16 @@ export default function Layout() {
     isSidebarCollapsed ? 'w-20' : 'w-64',
   );
   const sidebarHeaderClass = cn(
-    'flex flex-shrink-0 items-center border-b border-sidebar-border',
-    isSidebarCollapsed ? 'justify-center px-2 py-3' : 'justify-between gap-3 px-4 py-4',
+    'flex flex-shrink-0 items-center justify-center border-b border-sidebar-border',
+    isSidebarCollapsed ? 'px-2 py-3' : 'px-4 py-4',
   );
   const sidebarNavClass = cn(
     'flex-1 overflow-y-auto space-y-0.5 py-3',
     isSidebarCollapsed ? 'px-1' : 'px-2',
+  );
+  const sidebarToggleButtonClass = cn(
+    'group flex w-full items-center justify-center rounded-lg border border-sidebar-border bg-sidebar px-3 py-2.5 text-sm font-bold text-sidebar-foreground transition-all duration-200 ease-out hover:bg-sidebar-accent hover:text-sidebar-accent-foreground hover:shadow-md',
+    isSidebarCollapsed ? 'gap-0 px-2 hover:translate-x-0' : 'gap-2 hover:translate-x-1',
   );
   const sidebarLogoutButtonClass = cn(
     'group flex w-full items-center justify-center rounded-lg px-3 py-2.5 text-sm font-bold text-sidebar-foreground transition-all duration-200 ease-out hover:bg-sidebar-accent hover:text-sidebar-accent-foreground hover:shadow-md',
@@ -196,21 +201,6 @@ export default function Layout() {
               className="w-36 h-auto select-none pointer-events-none"
             />
           ) : null}
-          <button
-            type="button"
-            onClick={() => setIsSidebarCollapsed((value) => !value)}
-            aria-label={isSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-            aria-controls="app-sidebar"
-            aria-expanded={!isSidebarCollapsed}
-            title={isSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-            className="inline-flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg border border-sidebar-border bg-sidebar text-sidebar-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-          >
-            {isSidebarCollapsed ? (
-              <ChevronRight className="h-4 w-4" />
-            ) : (
-              <ChevronLeft className="h-4 w-4" />
-            )}
-          </button>
         </div>
 
         {!isSidebarCollapsed ? (
@@ -275,8 +265,27 @@ export default function Layout() {
         <div className={cn('border-t border-sidebar-border flex-shrink-0', isSidebarCollapsed ? 'p-2' : 'p-3')}>
           <button
             type="button"
+            onClick={() => setIsSidebarCollapsed((value) => !value)}
+            aria-label={isSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            aria-controls="app-sidebar"
+            aria-expanded={!isSidebarCollapsed}
+            title={isSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            className={sidebarToggleButtonClass}
+          >
+            {isSidebarCollapsed ? (
+              <ChevronRight className="h-4 w-4" />
+            ) : (
+              <ChevronLeft className="h-4 w-4" />
+            )}
+            <span className={sidebarItemLabelClass}>
+              {isSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            </span>
+          </button>
+
+          <button
+            type="button"
             onClick={() => setShowLogoutDialog(true)}
-            className={sidebarLogoutButtonClass}
+            className={cn(sidebarLogoutButtonClass, 'mt-2')}
             aria-label="Log out"
             title="Log out"
           >
@@ -316,7 +325,10 @@ export default function Layout() {
               <button
                 type="button"
                 className="inline-flex items-center justify-center rounded-md bg-destructive px-3.5 py-2 text-sm font-medium text-destructive-foreground hover:bg-destructive/90"
-                onClick={() => base44.auth.logout()}
+                onClick={() => {
+                  setShowLogoutDialog(false);
+                  logout();
+                }}
               >
                 Log out
               </button>
