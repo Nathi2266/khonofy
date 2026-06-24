@@ -95,32 +95,13 @@ jobs:
         run: |
           chmod +x scripts/prepare-frontend-dist-for-deploy.sh
           scripts/prepare-frontend-dist-for-deploy.sh frontend-dist-deploy
-
-      - name: Shrink workspace for prebuilt deploy
-        if: github.event_name == 'workflow_dispatch' && inputs.caller_run_id != ''
-        run: |
-          set -euo pipefail
-          mkdir -p deploy-upload
-          cp -a dist/. deploy-upload/
-          if [ -f public/staticwebapp.config.json ]; then
-            cp public/staticwebapp.config.json deploy-upload/staticwebapp.config.json
-          fi
-          find . -mindepth 1 -maxdepth 1 ! -name 'deploy-upload' -exec rm -rf {} +
-          mv deploy-upload dist
-          echo "Workspace reduced to dist only ($(du -sh dist | cut -f1))."
-
-      - name: Install OIDC Client from Core Package
-        if: github.event_name != 'workflow_dispatch' || inputs.caller_run_id == ''
-        run: npm install @actions/core@1.6.0 @actions/http-client
+          rm -rf frontend-dist-deploy
 
       - name: Get Id Token
-        if: github.event_name != 'workflow_dispatch' || inputs.caller_run_id == ''
         uses: actions/github-script@v6
         id: idtoken
         with:
-          script: |
-            const coredemo = require('@actions/core')
-            return await coredemo.getIDToken()
+          script: return await core.getIDToken()
           result-encoding: string
 
       - name: Deploy prebuilt frontend dist
@@ -136,10 +117,10 @@ jobs:
           api_location: ""
           app_artifact_location: "dist"
           skip_app_build: true
+          github_id_token: ${{ steps.idtoken.outputs.result }}
 
       - name: Build And Deploy
         if: github.event_name != 'workflow_dispatch' || inputs.caller_run_id == ''
-        id: builddeploy
         uses: Azure/static-web-apps-deploy@v1
         env:
           VITE_API_URL: ${{ secrets.VITE_API_URL }}
