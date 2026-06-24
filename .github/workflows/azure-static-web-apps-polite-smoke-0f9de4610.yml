@@ -125,7 +125,6 @@ jobs:
 
       - name: Deploy prebuilt frontend dist
         if: github.event_name == 'workflow_dispatch' && inputs.caller_run_id != ''
-        id: builddeploy
         uses: Azure/static-web-apps-deploy@v1
         env:
           VITE_APP_VERSION: ${{ needs.set-app-version.outputs.app_version }}
