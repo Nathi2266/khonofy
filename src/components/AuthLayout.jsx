@@ -90,9 +90,17 @@ export default function AuthLayout({
       </div>
 
       {footer ? (
-        <p className="pointer-events-none absolute bottom-4 left-0 right-0 z-20 select-none px-4 text-center text-xs text-muted-foreground/80">
-          {footer}
-        </p>
+        <div className="absolute bottom-4 left-0 right-0 z-20 flex justify-center px-4">
+          <div
+            className={cn(
+              "rounded-full px-3 py-1.5 text-xs font-semibold tracking-wide shadow-lg backdrop-blur-md",
+              "border border-black/15 bg-white/85 text-gray-900",
+              "dark:border-white/25 dark:bg-black/60 dark:text-white"
+            )}
+          >
+            {footer}
+          </div>
+        </div>
       ) : null}
     </div>
   );
