@@ -276,139 +276,142 @@ export default function TimesheetManagement() {
         </div>
       ) : null}
 
-      <div className="w-full space-y-6">
-        <div className="rounded-xl border border-border bg-card p-4">
-          <div className="mb-4 flex items-center justify-between">
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
+        <div className="min-w-0 space-y-5">
+          <div className="rounded-2xl border border-border bg-card p-4 md:p-5">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-3">
               <button
                 onClick={() => setWeekOffset(weekOffset - 1)}
-                className="flex h-8 w-8 items-center justify-center rounded-lg border border-border text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                className="flex h-8 w-8 items-center justify-center rounded-full border border-border text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
               >
                 ‹
               </button>
               <div className="text-center">
-                <p className="text-sm font-semibold text-foreground">
+                <p className="text-sm font-medium text-foreground">
                   Week of {new Date(week.start).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                   {' – '}
                   {new Date(week.end).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                 </p>
-                {weekOffset === 0 ? <p className="text-xs font-medium text-primary">Current Week</p> : null}
+                {weekOffset === 0 ? <p className="text-xs text-muted-foreground">Current week</p> : null}
               </div>
               <button
                 onClick={() => setWeekOffset(weekOffset + 1)}
                 disabled={weekOffset >= 0}
-                className="flex h-8 w-8 items-center justify-center rounded-lg border border-border text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-40"
+                className="flex h-8 w-8 items-center justify-center rounded-full border border-border text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-40"
               >
                 ›
               </button>
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 rounded-full bg-muted/40 px-3 py-2">
               <DashboardIcon src={dashboardIcon5} className={DASHBOARD_ICON_SIZES.section} />
               <div className="text-right">
-                <p className="text-2xl font-bold text-primary">{totalHours.toFixed(1)}h</p>
-                <p className="text-xs text-muted-foreground">this week</p>
+                <p className="text-xl font-semibold text-foreground">{totalHours.toFixed(1)}h</p>
+                <p className="text-[11px] text-muted-foreground">logged this week</p>
               </div>
               {currentSheet ? <StatusBadge status={currentSheet.status} /> : null}
             </div>
           </div>
 
-          <div className="mb-4 rounded-lg border border-border bg-muted/20 px-4 py-3">
-            <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="mb-4 rounded-xl border border-border bg-muted/20 px-4 py-3">
+            <div className="flex items-center justify-between gap-3">
               <div>
-                <p className="text-sm font-semibold text-foreground">Submission readiness</p>
+                <p className="text-sm font-medium text-foreground">Readiness checklist</p>
                 <p className="text-xs text-muted-foreground">
-                  {currentSheet ? `Current status: ${statusLabel}.` : 'Current status: Draft. This week has not been submitted yet.'}
+                  {currentSheet ? `Status: ${statusLabel}.` : 'Status: Draft.'}
                 </p>
               </div>
-              <div className="text-xs text-muted-foreground">
-                {blockedChecklistItems.length === 0 ? 'Ready to submit' : `${blockedChecklistItems.length} item${blockedChecklistItems.length > 1 ? 's' : ''} missing`}
-              </div>
+              <span className="text-xs text-muted-foreground">
+                {blockedChecklistItems.length === 0 ? 'Ready to submit' : `${blockedChecklistItems.length} items missing`}
+              </span>
             </div>
-            <div className="mt-3 grid gap-2 md:grid-cols-2">
+            <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
               {readinessChecklist.map((item) => (
                 <div
                   key={item.label}
-                  className={`rounded-md border px-3 py-2 text-sm ${
-                    item.passed ? 'border-emerald-200 bg-emerald-50 text-emerald-900' : 'border-amber-200 bg-amber-50 text-amber-900'
+                  className={`rounded-lg border px-3 py-2 ${
+                    item.passed ? 'border-border bg-background' : 'border-amber-200 bg-amber-50'
                   }`}
                 >
-                  <div className="flex items-start justify-between gap-3">
-                    <span className="font-medium">{item.label}</span>
-                    <span className="text-xs font-semibold">{item.passed ? 'Ready' : 'Missing'}</span>
-                  </div>
-                  <p className="mt-1 text-xs opacity-90">{item.detail}</p>
+                  <p className="text-sm font-medium text-foreground">{item.label}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">{item.detail}</p>
                 </div>
               ))}
             </div>
           </div>
 
           {currentSheet?.status === 'pending' ? (
-            <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700">
-              <span>This timesheet is waiting for admin review.</span>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="gap-1.5 border-amber-300 bg-white text-amber-800 hover:bg-amber-100"
-                onClick={() => setTimesheetToWithdraw(currentSheet)}
-              >
-                <Undo2 className="h-3.5 w-3.5" />
-                Withdraw
-              </Button>
+            <div className="mb-4 rounded-xl border border-border bg-background px-4 py-3 text-sm text-muted-foreground">
+              <div className="flex items-center justify-between gap-3">
+                <span>This timesheet is waiting for admin review.</span>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5"
+                  onClick={() => setTimesheetToWithdraw(currentSheet)}
+                >
+                  <Undo2 className="h-3.5 w-3.5" />
+                  Withdraw
+                </Button>
+              </div>
             </div>
           ) : null}
 
           {currentSheet?.status === 'revoke_pending' ? (
-            <div className="mb-4 rounded-lg border border-purple-200 bg-purple-50 px-3 py-2 text-sm text-purple-800">
-              Your revocation request is waiting for admin approval. The calendar stays locked until your admin approves or declines it.
+            <div className="mb-4 rounded-xl border border-border bg-background px-4 py-3 text-sm text-muted-foreground">
+              <div className="flex items-center justify-between gap-3">
+                <span>Revocation requested. The week stays locked until admin decides.</span>
+                <span className="text-xs">Pending review</span>
+              </div>
               {currentSheet.revoke_requested_at ? (
-                <span className="mt-1 block text-xs text-purple-700">
+                <p className="mt-1 text-xs text-muted-foreground">
                   Requested on {new Date(currentSheet.revoke_requested_at).toLocaleString()}
-                </span>
+                </p>
               ) : null}
             </div>
           ) : null}
 
           {currentSheet?.status === 'approved' && canRevokeTimesheet(currentSheet) ? (
-            <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
-              <span>
-                Approved. You can revoke until {currentSheetRevokeDeadline?.toLocaleString()}.
-              </span>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="gap-1.5 border-emerald-300 bg-white text-emerald-800 hover:bg-emerald-100"
-                onClick={() => setTimesheetToRevoke(currentSheet)}
-              >
-                <RotateCcw className="h-3.5 w-3.5" />
-                Revoke
-              </Button>
-            </div>
-          ) : null}
-
-          {currentSheet?.status === 'draft' && currentSheet.withdrawn_at ? (
-            <div className="mb-4 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
-              You withdrew this timesheet on {new Date(currentSheet.withdrawn_at).toLocaleString()}. You can edit your entries and submit again.
-            </div>
-          ) : null}
-
-          {currentSheet?.status === 'draft' && currentSheet.revoked_at ? (
-            <div className="mb-4 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
-              Your admin approved your revocation on {new Date(currentSheet.revoked_at).toLocaleString()}. You can edit your entries and submit again.
+            <div className="mb-4 rounded-xl border border-border bg-background px-4 py-3 text-sm text-muted-foreground">
+              <div className="flex items-center justify-between gap-3">
+                <span>Approved. Revocation is available until {currentSheetRevokeDeadline?.toLocaleString()}.</span>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5"
+                  onClick={() => setTimesheetToRevoke(currentSheet)}
+                >
+                  <RotateCcw className="h-3.5 w-3.5" />
+                  Revoke
+                </Button>
+              </div>
             </div>
           ) : null}
 
           {currentSheet?.admin_notes && currentSheet.status === 'rejected' ? (
-            <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3">
-              <p className="text-xs font-semibold text-red-700">Rejection reason:</p>
-              <p className="mt-0.5 text-sm text-red-700">{currentSheet.admin_notes}</p>
+            <div className="mb-4 rounded-xl border border-border bg-background px-4 py-3">
+              <p className="text-xs font-medium text-muted-foreground">Rejection note</p>
+              <p className="mt-1 text-sm text-foreground">{currentSheet.admin_notes}</p>
+            </div>
+          ) : null}
+
+          {currentSheet?.status === 'draft' && currentSheet.withdrawn_at ? (
+            <div className="mb-4 rounded-xl border border-border bg-background px-4 py-3 text-sm text-muted-foreground">
+              Withdrawn on {new Date(currentSheet.withdrawn_at).toLocaleString()}. You can edit and submit again.
+            </div>
+          ) : null}
+
+          {currentSheet?.status === 'draft' && currentSheet.revoked_at ? (
+            <div className="mb-4 rounded-xl border border-border bg-background px-4 py-3 text-sm text-muted-foreground">
+              Revocation approved on {new Date(currentSheet.revoked_at).toLocaleString()}. You can edit and submit again.
             </div>
           ) : null}
 
           {isLocked ? (
-            <div className="mb-4 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+            <div className="mb-4 rounded-xl border border-border bg-background px-4 py-3 text-sm text-muted-foreground">
               {lockReason}
             </div>
           ) : null}
@@ -421,20 +424,17 @@ export default function TimesheetManagement() {
               const isToday = dateStr === new Date().toISOString().split('T')[0];
               const hasEntries = entries.length > 0;
               return (
-                <div
-                  key={dateStr}
-                  className={`rounded-lg border transition-colors ${isToday ? 'border-primary/30 bg-primary/5' : 'border-border'}`}
-                >
+                <div key={dateStr} className={`rounded-xl border ${isToday ? 'border-primary/20 bg-primary/5' : 'border-border bg-background'}`}>
                   <div
                     className={`flex items-center justify-between px-3 py-2.5 ${hasEntries ? 'cursor-pointer' : ''}`}
                     onClick={() => hasEntries && setExpanded(expanded === dateStr ? null : dateStr)}
                   >
                     <div className="flex items-center gap-2">
-                      <span className={`text-sm font-medium ${isToday ? 'text-primary' : 'text-foreground'}`}>{dayName}</span>
-                      {isToday ? <span className="rounded-full bg-primary px-1.5 py-0.5 text-xs font-medium text-white">Today</span> : null}
+                      <span className="text-sm font-medium text-foreground">{dayName}</span>
+                      {isToday ? <span className="rounded-full bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">Today</span> : null}
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className={`text-sm font-semibold ${dayHours > 0 ? 'text-foreground' : 'text-muted-foreground'}`}>
+                      <span className={`text-sm font-medium ${dayHours > 0 ? 'text-foreground' : 'text-muted-foreground'}`}>
                         {dayHours > 0 ? `${dayHours.toFixed(1)}h` : '—'}
                       </span>
                       {hasEntries ? (
@@ -445,7 +445,7 @@ export default function TimesheetManagement() {
                   {expanded === dateStr ? (
                     <div className="space-y-1.5 border-t border-border px-3 pb-3">
                       {entries.map((entry) => (
-                        <div key={entry.id} className="flex items-start justify-between rounded-md bg-background px-2 py-1.5">
+                        <div key={entry.id} className="flex items-start justify-between rounded-md bg-muted/30 px-2 py-1.5">
                           <div>
                             <p className="text-sm font-medium text-foreground">{entry.task_title || 'Task'}</p>
                             {entry.description ? <p className="text-xs text-muted-foreground">{entry.description}</p> : null}
@@ -478,13 +478,15 @@ export default function TimesheetManagement() {
               {submitTimesheet.isPending ? 'Submitting...' : currentSheetStatus === 'revoke_pending' ? 'Locked for Revocation Review' : 'Submit for Approval'}
             </Button>
           </div>
+          </div>
         </div>
 
-        <div className="rounded-xl border border-border bg-card p-5">
-          <h2 className="mb-4 font-semibold text-foreground">Timesheet History</h2>
-          <div className="space-y-2">
+        <aside className="space-y-5 xl:sticky xl:top-6">
+          <div className="rounded-2xl border border-border bg-card p-4 md:p-5">
+            <h2 className="mb-3 text-sm font-medium text-foreground">Timesheet history</h2>
+            <div className="space-y-2">
             {[...timesheets].sort((left, right) => new Date(right.week_start).getTime() - new Date(left.week_start).getTime()).map((timesheet) => (
-              <div key={timesheet.id} className="flex items-center justify-between rounded-lg bg-muted/40 px-4 py-3 transition-colors hover:bg-muted/60">
+              <div key={timesheet.id} className="flex items-center justify-between rounded-xl border border-border bg-background px-4 py-3">
                 <div>
                   <p className="text-sm font-medium text-foreground">
                     {new Date(timesheet.week_start).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
@@ -546,8 +548,9 @@ export default function TimesheetManagement() {
                 <p className="text-sm text-muted-foreground">No timesheets submitted yet.</p>
               </div>
             ) : null}
+            </div>
           </div>
-        </div>
+        </aside>
       </div>
 
       <AlertDialog open={!!timesheetToWithdraw} onOpenChange={() => setTimesheetToWithdraw(null)}>
