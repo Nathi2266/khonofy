@@ -22,6 +22,7 @@ concurrency:
 jobs:
   ci:
     uses: ./.github/workflows/ci.yml
+    secrets: inherit
 
   promote-via-deploy:
     needs: ci
@@ -139,6 +140,34 @@ jobs:
           git commit -m "chore: bump app version to 1.0.${GITHUB_RUN_NUMBER} [skip ci]"
           git push origin deploy
 
+      - name: Checkout deploy for dist refresh
+        if: steps.merge.outputs.merged == 'true' && steps.changes.outputs.frontend == 'true'
+        uses: actions/checkout@v4
+        with:
+          ref: deploy
+          fetch-depth: 0
+
+      - name: Download CI frontend dist
+        if: steps.merge.outputs.merged == 'true' && steps.changes.outputs.frontend == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend-dist
+
+      - name: Refresh CI dist for deploy branch
+        if: steps.merge.outputs.merged == 'true' && steps.changes.outputs.frontend == 'true'
+        run: |
+          chmod +x scripts/prepare-frontend-dist-for-deploy.sh
+          scripts/prepare-frontend-dist-for-deploy.sh frontend-dist
+
+      - name: Upload frontend dist for Azure deploy
+        if: steps.merge.outputs.merged == 'true' && steps.changes.outputs.frontend == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist-deploy
+          path: dist
+          retention-days: 1
+
       - name: Trigger backend deploy workflow
         if: steps.merge.outputs.merged == 'true' && steps.changes.outputs.backend == 'true'
         env:
@@ -152,5 +181,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh workflow run azure-static-web-apps-polite-smoke-0f9de4610.yml --ref deploy
-          echo "Triggered frontend deploy on deploy branch."
+          gh workflow run azure-static-web-apps-polite-smoke-0f9de4610.yml \
+            --ref deploy \
+            -f caller_run_id="${{ github.run_id }}"
+          echo "Triggered frontend deploy on deploy branch (using CI dist artifact)."

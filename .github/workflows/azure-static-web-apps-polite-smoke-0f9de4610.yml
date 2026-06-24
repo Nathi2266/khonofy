@@ -3,6 +3,11 @@ name: Azure Static Web Apps CI/CD
 
 on:
   workflow_dispatch:
+    inputs:
+      caller_run_id:
+        description: Auto PR workflow run ID with frontend-dist-deploy artifact
+        required: false
+        type: string
   push:
     branches:
       - main
@@ -68,6 +73,7 @@ jobs:
     permissions:
       id-token: write
       contents: read
+      actions: read
     steps:
       - uses: actions/checkout@v4
         with:
@@ -76,6 +82,19 @@ jobs:
       - name: Log build version
         run: |
           node -e "const p=require('./package.json'); console.log('> ' + p.name + '@' + p.version + ' build')"
+      - name: Download prebuilt frontend dist from CI
+        if: github.event_name == 'workflow_dispatch' && inputs.caller_run_id != ''
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-dist-deploy
+          run-id: ${{ inputs.caller_run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: frontend-dist-deploy
+      - name: Prepare clean dist from CI build
+        if: github.event_name == 'workflow_dispatch' && inputs.caller_run_id != ''
+        run: |
+          chmod +x scripts/prepare-frontend-dist-for-deploy.sh
+          scripts/prepare-frontend-dist-for-deploy.sh frontend-dist-deploy
       - name: Install OIDC Client from Core Package
         run: npm install @actions/core@1.6.0 @actions/http-client
       - name: Get Id Token
@@ -104,6 +123,7 @@ jobs:
           app_location: "/"
           api_location: ""
           output_location: "dist"
+          skip_app_build: ${{ github.event_name == 'workflow_dispatch' && inputs.caller_run_id != '' }}
           app_build_command: "npm run build"
           github_id_token: ${{ steps.idtoken.outputs.result }}
 
