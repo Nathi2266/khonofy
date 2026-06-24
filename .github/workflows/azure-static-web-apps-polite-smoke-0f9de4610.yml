@@ -1,4 +1,4 @@
-# Runs on push to deploy (and main) when frontend files change: version, build, Azure deploy, then PR to main.
+# Runs on deploy (and main) when frontend files change. Last job opens PR deploy -> main.
 name: Azure Static Web Apps CI/CD
 
 on:
@@ -20,8 +20,6 @@ on:
       - 'package-lock.json'
       - 'scripts/**'
       - '.github/workflows/azure-static-web-apps-polite-smoke-0f9de4610.yml'
-  # PR previews only for human-opened PRs to main.
-  # deploy branch uses workflow_dispatch after auto-merge (bot PRs skip approval).
   pull_request:
     types: [opened, synchronize, reopened, closed]
     branches:
@@ -109,59 +107,29 @@ jobs:
           app_build_command: "npm run build"
           github_id_token: ${{ steps.idtoken.outputs.result }}
 
-  sync-version-to-main:
-    needs: [set-app-version, build_and_deploy_job]
-    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/deploy'
+  open-pr-to-main:
+    needs: build_and_deploy_job
+    if: |
+      needs.build_and_deploy_job.result == 'success' &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
+      github.ref == 'refs/heads/deploy'
     runs-on: ubuntu-latest
-    name: Sync version to main
     permissions:
-      contents: write
+      contents: read
       pull-requests: write
+      actions: read
     steps:
       - uses: actions/checkout@v4
         with:
           ref: deploy
           fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Open PR from deploy to main
+      - name: Open PR from deploy to main when deploys are done
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          set -euo pipefail
-
-          AHEAD_BY="$(gh api "/repos/${GITHUB_REPOSITORY}/compare/main...deploy" --jq '.ahead_by')"
-          if [ "${AHEAD_BY}" -eq 0 ]; then
-            echo "deploy is already in sync with main."
-            exit 0
-          fi
-
-          EXISTING_PR="$(gh pr list \
-            --repo "${GITHUB_REPOSITORY}" \
-            --base main \
-            --head deploy \
-            --state open \
-            --json number \
-            --jq '.[0].number // empty')"
-
-          if [ -z "${EXISTING_PR}" ]; then
-            PR_URL="$(gh pr create \
-              --repo "${GITHUB_REPOSITORY}" \
-              --base main \
-              --head deploy \
-              --title "Release ${{ needs.set-app-version.outputs.app_version }} to main" \
-              --body "Automated version sync after Azure frontend deploy.
-
-          Version: \`${{ needs.set-app-version.outputs.app_version }}\`"
-            )"
-            echo "Created PR: ${PR_URL}"
-          else
-            PR_URL="$(gh pr view "${EXISTING_PR}" \
-              --repo "${GITHUB_REPOSITORY}" \
-              --json url \
-              --jq '.url')"
-            echo "Existing PR: ${PR_URL}"
-          fi
+          chmod +x scripts/open-deploy-pr-to-main.sh
+          scripts/open-deploy-pr-to-main.sh
 
   close_pull_request_job:
     if: github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.user.login != 'github-actions[bot]'
