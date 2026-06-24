@@ -15,7 +15,6 @@ import sidebarIcon4 from '@/assets/images/side_bar/4.png';
 import sidebarIcon5 from '@/assets/images/side_bar/5.png';
 import sidebarIcon6 from '@/assets/images/side_bar/6.png';
 import sidebarIcon7 from '@/assets/images/side_bar/7.png';
-import sidebarIcon8 from '@/assets/images/side_bar/8.png';
 import sidebarIcon9 from '@/assets/images/side_bar/9.png';
 import profileIcon from '@/assets/images/side_bar/8.png';
 
