@@ -92,6 +92,8 @@ jobs:
       - name: Open PR from deploy to main when deploys are done
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SELF_WORKFLOW: backend
+          DEPLOY_SHA: ${{ github.sha }}
         run: |
           chmod +x scripts/open-deploy-pr-to-main.sh
           scripts/open-deploy-pr-to-main.sh

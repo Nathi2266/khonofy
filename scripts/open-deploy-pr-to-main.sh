@@ -1,66 +1,103 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-DEPLOY_SHA="$(git rev-parse HEAD)"
-echo "Checking deploy workflows for ${DEPLOY_SHA}"
+# SELF_WORKFLOW: backend | frontend (the workflow that invoked this script)
+SELF_WORKFLOW="${SELF_WORKFLOW:-}"
+DEPLOY_SHA="${DEPLOY_SHA:-$(git rev-parse HEAD)}"
+MAX_ATTEMPTS="${MAX_ATTEMPTS:-40}"
+WAIT_SECONDS="${WAIT_SECONDS:-30}"
 
-workflow_needed() {
+echo "Open deploy PR check (self=${SELF_WORKFLOW}, sha=${DEPLOY_SHA})"
+
+workflow_was_triggered() {
   local workflow_file="$1"
   gh api "/repos/${GITHUB_REPOSITORY}/actions/workflows/${workflow_file}/runs?branch=deploy&per_page=30" \
     --jq "[.workflow_runs[] | select(.head_sha==\"${DEPLOY_SHA}\" and .event != \"pull_request\")] | length > 0"
 }
 
-workflow_succeeded() {
+workflow_is_successful() {
   local workflow_file="$1"
-  local status
-  status="$(gh api "/repos/${GITHUB_REPOSITORY}/actions/workflows/${workflow_file}/runs?branch=deploy&per_page=30" \
-    --jq ".workflow_runs[] | select(.head_sha==\"${DEPLOY_SHA}\" and .event != \"pull_request\") | \"\(.status):\(.conclusion)\"" \
-    | head -n 1)"
+  gh api "/repos/${GITHUB_REPOSITORY}/actions/workflows/${workflow_file}/runs?branch=deploy&per_page=30" \
+    --jq "[.workflow_runs[] | select(.head_sha==\"${DEPLOY_SHA}\" and .event != \"pull_request\" and .status==\"completed\" and .conclusion==\"success\")] | length > 0"
+}
 
-  if [ -z "${status}" ]; then
-    echo "false"
-    return
-  fi
-
-  local run_status="${status%%:*}"
-  local run_conclusion="${status#*:}"
-
-  if [ "${run_status}" = "completed" ] && [ "${run_conclusion}" = "success" ]; then
-    echo "true"
-  else
-    echo "pending:${status}"
-  fi
+workflow_is_failed() {
+  local workflow_file="$1"
+  gh api "/repos/${GITHUB_REPOSITORY}/actions/workflows/${workflow_file}/runs?branch=deploy&per_page=30" \
+    --jq "[.workflow_runs[] | select(.head_sha==\"${DEPLOY_SHA}\" and .event != \"pull_request\" and .status==\"completed\" and .conclusion != \"success\")] | length > 0"
 }
 
 check_workflow() {
   local name="$1"
   local workflow_file="$2"
+  local self_label="$3"
 
-  if [ "$(workflow_needed "${workflow_file}")" != "true" ]; then
+  if [ "${SELF_WORKFLOW}" = "${self_label}" ]; then
+    echo "${name} deploy completed (this workflow)."
+    return 0
+  fi
+
+  if [ "$(workflow_was_triggered "${workflow_file}")" != "true" ]; then
     echo "${name} deploy was not triggered for ${DEPLOY_SHA}."
     return 0
   fi
 
-  local result
-  result="$(workflow_succeeded "${workflow_file}")"
-  if [ "${result}" = "true" ]; then
+  if [ "$(workflow_is_successful "${workflow_file}")" = "true" ]; then
     echo "${name} deploy completed successfully."
     return 0
   fi
 
-  echo "${name} deploy still running or failed (${result})."
+  if [ "$(workflow_is_failed "${workflow_file}")" = "true" ]; then
+    echo "${name} deploy failed."
+    return 2
+  fi
+
+  echo "${name} deploy still running."
   return 1
 }
 
-if ! check_workflow "Backend" "deploy_khonofy-backend-api.yml"; then
-  echo "Waiting for backend deploy to finish."
-  exit 0
-fi
+all_required_deploys_done() {
+  local backend_status=0
+  local frontend_status=0
 
-if ! check_workflow "Frontend" "azure-static-web-apps-polite-smoke-0f9de4610.yml"; then
-  echo "Waiting for frontend deploy to finish."
-  exit 0
-fi
+  check_workflow "Backend" "deploy_khonofy-backend-api.yml" "backend" || backend_status=$?
+  if [ "${backend_status}" -eq 2 ]; then
+    return 2
+  fi
+
+  check_workflow "Frontend" "azure-static-web-apps-polite-smoke-0f9de4610.yml" "frontend" || frontend_status=$?
+  if [ "${frontend_status}" -eq 2 ]; then
+    return 2
+  fi
+
+  if [ "${backend_status}" -eq 1 ] || [ "${frontend_status}" -eq 1 ]; then
+    return 1
+  fi
+
+  return 0
+}
+
+for attempt in $(seq 1 "${MAX_ATTEMPTS}"); do
+  echo "Attempt ${attempt}/${MAX_ATTEMPTS}"
+  all_required_deploys_done
+  status=$?
+
+  if [ "${status}" -eq 0 ]; then
+    break
+  fi
+
+  if [ "${status}" -eq 2 ]; then
+    echo "A required deploy workflow failed. Not opening PR."
+    exit 1
+  fi
+
+  if [ "${attempt}" -eq "${MAX_ATTEMPTS}" ]; then
+    echo "Timed out waiting for deploy workflows to finish."
+    exit 1
+  fi
+
+  sleep "${WAIT_SECONDS}"
+done
 
 AHEAD_BY="$(gh api "/repos/${GITHUB_REPOSITORY}/compare/main...deploy" --jq '.ahead_by')"
 if [ "${AHEAD_BY}" -eq 0 ]; then
