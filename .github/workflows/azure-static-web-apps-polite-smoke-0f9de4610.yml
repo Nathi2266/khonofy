@@ -118,9 +118,7 @@ jobs:
         uses: actions/github-script@v6
         id: idtoken
         with:
-          script: |
-            const coredemo = require('@actions/core')
-            return await coredemo.getIDToken()
+          script: return await core.getIDToken()
           result-encoding: string
 
       - name: Deploy prebuilt frontend dist
