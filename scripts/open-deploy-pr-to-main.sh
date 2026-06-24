@@ -9,63 +9,87 @@ WAIT_SECONDS="${WAIT_SECONDS:-30}"
 
 echo "Open deploy PR check (self=${SELF_WORKFLOW}, sha=${DEPLOY_SHA})"
 
+file_requires_backend() {
+  case "$1" in
+    backend/*|.github/workflows/deploy_khonofy-backend-api.yml) return 0 ;;
+  esac
+  return 1
+}
+
+file_requires_frontend() {
+  case "$1" in
+    src/*|index.html|vite.config.js|tailwind.config.js|postcss.config.js|components.json|jsconfig.json|scripts/*|.github/workflows/azure-static-web-apps-polite-smoke-0f9de4610.yml) return 0 ;;
+    public/*)
+      [ "$1" != "public/app-version.json" ] && return 0
+      ;;
+  esac
+  return 1
+}
+
+workflow_latest_status() {
+  local workflow_file="$1"
+  gh api "/repos/${GITHUB_REPOSITORY}/actions/workflows/${workflow_file}/runs?branch=deploy&per_page=30" \
+    --jq ".workflow_runs[] | select(.head_sha==\"${DEPLOY_SHA}\" and .event != \"pull_request\") | \"\(.status):\(.conclusion)\"" \
+    | head -n 1
+}
+
 workflow_was_triggered() {
   local workflow_file="$1"
-  gh api "/repos/${GITHUB_REPOSITORY}/actions/workflows/${workflow_file}/runs?branch=deploy&per_page=30" \
-    --jq "[.workflow_runs[] | select(.head_sha==\"${DEPLOY_SHA}\" and .event != \"pull_request\")] | length > 0"
-}
-
-workflow_is_successful() {
-  local workflow_file="$1"
-  gh api "/repos/${GITHUB_REPOSITORY}/actions/workflows/${workflow_file}/runs?branch=deploy&per_page=30" \
-    --jq "[.workflow_runs[] | select(.head_sha==\"${DEPLOY_SHA}\" and .event != \"pull_request\" and .status==\"completed\" and .conclusion==\"success\")] | length > 0"
-}
-
-workflow_is_failed() {
-  local workflow_file="$1"
-  gh api "/repos/${GITHUB_REPOSITORY}/actions/workflows/${workflow_file}/runs?branch=deploy&per_page=30" \
-    --jq "[.workflow_runs[] | select(.head_sha==\"${DEPLOY_SHA}\" and .event != \"pull_request\" and .status==\"completed\" and .conclusion != \"success\")] | length > 0"
+  [ -n "$(workflow_latest_status "${workflow_file}")" ]
 }
 
 check_workflow() {
   local name="$1"
   local workflow_file="$2"
   local self_label="$3"
+  local required="$4"
+
+  if [ "${required}" != "true" ]; then
+    echo "${name} deploy not required for this release."
+    return 0
+  fi
 
   if [ "${SELF_WORKFLOW}" = "${self_label}" ]; then
     echo "${name} deploy completed (this workflow)."
     return 0
   fi
 
-  if [ "$(workflow_was_triggered "${workflow_file}")" != "true" ]; then
-    echo "${name} deploy was not triggered for ${DEPLOY_SHA}."
-    return 0
+  if ! workflow_was_triggered "${workflow_file}"; then
+    echo "${name} deploy has not started for ${DEPLOY_SHA}."
+    return 1
   fi
 
-  if [ "$(workflow_is_successful "${workflow_file}")" = "true" ]; then
+  local status
+  status="$(workflow_latest_status "${workflow_file}")"
+  local run_status="${status%%:*}"
+  local run_conclusion="${status#*:}"
+
+  if [ "${run_status}" = "completed" ] && [ "${run_conclusion}" = "success" ]; then
     echo "${name} deploy completed successfully."
     return 0
   fi
 
-  if [ "$(workflow_is_failed "${workflow_file}")" = "true" ]; then
-    echo "${name} deploy failed."
+  if [ "${run_status}" = "completed" ] && [ "${run_conclusion}" != "success" ]; then
+    echo "${name} deploy failed (${status})."
     return 2
   fi
 
-  echo "${name} deploy still running."
+  echo "${name} deploy still running (${status})."
   return 1
 }
 
 all_required_deploys_done() {
+  local backend_required="$1"
+  local frontend_required="$2"
   local backend_status=0
   local frontend_status=0
 
-  check_workflow "Backend" "deploy_khonofy-backend-api.yml" "backend" || backend_status=$?
+  check_workflow "Backend" "deploy_khonofy-backend-api.yml" "backend" "${backend_required}" || backend_status=$?
   if [ "${backend_status}" -eq 2 ]; then
     return 2
   fi
 
-  check_workflow "Frontend" "azure-static-web-apps-polite-smoke-0f9de4610.yml" "frontend" || frontend_status=$?
+  check_workflow "Frontend" "azure-static-web-apps-polite-smoke-0f9de4610.yml" "frontend" "${frontend_required}" || frontend_status=$?
   if [ "${frontend_status}" -eq 2 ]; then
     return 2
   fi
@@ -77,9 +101,18 @@ all_required_deploys_done() {
   return 0
 }
 
+BACKEND_REQUIRED=false
+FRONTEND_REQUIRED=false
+mapfile -t changed_files < <(gh api "/repos/${GITHUB_REPOSITORY}/compare/main...deploy" --jq '.files[].filename')
+for file in "${changed_files[@]}"; do
+  if file_requires_backend "${file}"; then BACKEND_REQUIRED=true; fi
+  if file_requires_frontend "${file}"; then FRONTEND_REQUIRED=true; fi
+done
+echo "Required deploys: backend=${BACKEND_REQUIRED}, frontend=${FRONTEND_REQUIRED}"
+
 for attempt in $(seq 1 "${MAX_ATTEMPTS}"); do
   echo "Attempt ${attempt}/${MAX_ATTEMPTS}"
-  all_required_deploys_done
+  all_required_deploys_done "${BACKEND_REQUIRED}" "${FRONTEND_REQUIRED}"
   status=$?
 
   if [ "${status}" -eq 0 ]; then
