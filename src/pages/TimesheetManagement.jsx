@@ -74,7 +74,7 @@ const STATUS_CONFIG = {
   pending: { label: 'Pending Review', color: 'bg-amber-100 text-amber-700', iconSrc: TIMESHEET_STATUS_ICONS.pending },
   approved: { label: 'Approved', color: 'bg-emerald-100 text-emerald-700', iconSrc: TIMESHEET_STATUS_ICONS.approved },
   rejected: { label: 'Rejected', color: 'bg-red-100 text-red-600', iconSrc: TIMESHEET_STATUS_ICONS.rejected },
-  revoke_pending: { label: 'Revoke Pending', color: 'bg-purple-100 text-purple-700', useLucide: RotateCcw },
+  revoke_pending: { label: 'Revocation Pending', color: 'bg-purple-100 text-purple-700', useLucide: RotateCcw },
 };
 
 export default function TimesheetManagement() {
@@ -111,6 +111,49 @@ export default function TimesheetManagement() {
 
   const currentSheet = timesheets.find((timesheet) => timesheet.week_start === week.start);
   const totalHours = timeEntries.reduce((sum, entry) => sum + (entry.hours || 0), 0);
+  const hasAssignedAdmin = !!user?.admin_id;
+  const currentSheetStatus = currentSheet?.status || 'draft';
+  const weeklyHourTargetLabel = weeklyHourTarget > 0 ? `${weeklyHourTarget.toFixed(1).replace(/\.0$/, '')}h` : 'No target';
+  const readinessChecklist = [
+    {
+      label: 'Admin assigned',
+      passed: hasAssignedAdmin,
+      detail: hasAssignedAdmin
+        ? 'You can submit this week to your assigned admin.'
+        : 'A super admin must assign an admin before submission is allowed.',
+    },
+    {
+      label: 'Time logged this week',
+      passed: totalHours > 0,
+      detail: totalHours > 0
+        ? `${totalHours.toFixed(1)}h logged so far.`
+        : 'Log at least one time entry before submitting.',
+    },
+    {
+      label: 'Weekly target met',
+      passed: !weeklyHourTarget || totalHours >= weeklyHourTarget,
+      detail: !weeklyHourTarget
+        ? 'No weekly target is set for your department.'
+        : `${totalHours.toFixed(1)}h logged of ${weeklyHourTargetLabel} required.`,
+    },
+    {
+      label: 'Week is editable',
+      passed: !currentSheet || currentSheetStatus === 'draft' || currentSheetStatus === 'rejected',
+      detail: currentSheetStatus === 'approved'
+        ? 'Approved sheets are locked until a revocation is approved.'
+        : currentSheetStatus === 'revoke_pending'
+          ? 'The sheet is locked while your revocation request is waiting.'
+          : 'This week can be submitted.',
+    },
+  ];
+  const blockedChecklistItems = readinessChecklist.filter((item) => !item.passed);
+  const isLocked = currentSheetStatus === 'approved' || currentSheetStatus === 'revoke_pending';
+  const lockReason = currentSheetStatus === 'approved'
+    ? 'This timesheet is locked because it has been approved.'
+    : currentSheetStatus === 'revoke_pending'
+      ? 'This timesheet is locked while your revocation request is waiting for admin review.'
+      : '';
+  const statusLabel = STATUS_CONFIG[currentSheetStatus]?.label || currentSheetStatus;
 
   const submitTimesheet = useMutation({
     mutationFn: async () => {
@@ -207,7 +250,6 @@ export default function TimesheetManagement() {
     dayLabels.push(date.toISOString().split('T')[0]);
   }
 
-  const hasAssignedAdmin = !!user?.admin_id;
   const meetsHourTarget = !weeklyHourTarget || totalHours >= weeklyHourTarget;
   const canSubmit = hasAssignedAdmin
     && totalHours > 0
@@ -268,6 +310,36 @@ export default function TimesheetManagement() {
                 <p className="text-xs text-muted-foreground">this week</p>
               </div>
               {currentSheet ? <StatusBadge status={currentSheet.status} /> : null}
+            </div>
+          </div>
+
+          <div className="mb-4 rounded-lg border border-border bg-muted/20 px-4 py-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold text-foreground">Submission readiness</p>
+                <p className="text-xs text-muted-foreground">
+                  {currentSheet ? `Current status: ${statusLabel}.` : 'Current status: Draft. This week has not been submitted yet.'}
+                </p>
+              </div>
+              <div className="text-xs text-muted-foreground">
+                {blockedChecklistItems.length === 0 ? 'Ready to submit' : `${blockedChecklistItems.length} item${blockedChecklistItems.length > 1 ? 's' : ''} missing`}
+              </div>
+            </div>
+            <div className="mt-3 grid gap-2 md:grid-cols-2">
+              {readinessChecklist.map((item) => (
+                <div
+                  key={item.label}
+                  className={`rounded-md border px-3 py-2 text-sm ${
+                    item.passed ? 'border-emerald-200 bg-emerald-50 text-emerald-900' : 'border-amber-200 bg-amber-50 text-amber-900'
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <span className="font-medium">{item.label}</span>
+                    <span className="text-xs font-semibold">{item.passed ? 'Ready' : 'Missing'}</span>
+                  </div>
+                  <p className="mt-1 text-xs opacity-90">{item.detail}</p>
+                </div>
+              ))}
             </div>
           </div>
 
@@ -335,6 +407,12 @@ export default function TimesheetManagement() {
             </div>
           ) : null}
 
+          {isLocked ? (
+            <div className="mb-4 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+              {lockReason}
+            </div>
+          ) : null}
+
           <div className="space-y-2">
             {dayLabels.map((dateStr) => {
               const entries = byDate[dateStr] || [];
@@ -388,16 +466,16 @@ export default function TimesheetManagement() {
           ) : null}
           {hasAssignedAdmin && weeklyHourTarget > 0 && !meetsHourTarget ? (
             <p className="text-xs text-amber-700">
-              You need at least {weeklyHourTarget}h logged this week before you can submit ({totalHours.toFixed(1)}h so far).
+              You need at least {weeklyHourTargetLabel} logged this week before you can submit ({totalHours.toFixed(1)}h so far).
             </p>
           ) : null}
             <Button
               onClick={() => submitTimesheet.mutate()}
-              disabled={!canSubmit || submitTimesheet.isPending}
+              disabled={!canSubmit || submitTimesheet.isPending || isLocked}
               className="gap-2"
             >
               <Send className="h-4 w-4" />
-              {submitTimesheet.isPending ? 'Submitting...' : 'Submit for Approval'}
+              {submitTimesheet.isPending ? 'Submitting...' : currentSheetStatus === 'revoke_pending' ? 'Locked for Revocation Review' : 'Submit for Approval'}
             </Button>
           </div>
         </div>
@@ -405,7 +483,7 @@ export default function TimesheetManagement() {
         <div className="rounded-xl border border-border bg-card p-5">
           <h2 className="mb-4 font-semibold text-foreground">Timesheet History</h2>
           <div className="space-y-2">
-            {timesheets.sort((left, right) => new Date(right.week_start).getTime() - new Date(left.week_start).getTime()).map((timesheet) => (
+            {[...timesheets].sort((left, right) => new Date(right.week_start).getTime() - new Date(left.week_start).getTime()).map((timesheet) => (
               <div key={timesheet.id} className="flex items-center justify-between rounded-lg bg-muted/40 px-4 py-3 transition-colors hover:bg-muted/60">
                 <div>
                   <p className="text-sm font-medium text-foreground">
