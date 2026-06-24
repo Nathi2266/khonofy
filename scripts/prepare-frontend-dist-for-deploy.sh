@@ -16,4 +16,9 @@ if [ -f public/app-version.json ]; then
   cp public/app-version.json dist/app-version.json
 fi
 
-echo "Prepared dist for deploy ($(find dist -type f | wc -l) files)."
+if [ -f public/staticwebapp.config.json ] && [ ! -f dist/staticwebapp.config.json ]; then
+  echo "Copying staticwebapp.config.json into dist..."
+  cp public/staticwebapp.config.json dist/staticwebapp.config.json
+fi
+
+echo "Prepared dist for deploy ($(find dist -type f | wc -l) files, $(du -sh dist | cut -f1))."
