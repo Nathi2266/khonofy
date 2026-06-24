@@ -90,6 +90,19 @@ function createEntryForm(entry, user) {
   };
 }
 
+function buildTemplateEntryForm(template, baseForm) {
+  const templateTags = parseEntryTags(template);
+  return {
+    ...baseForm,
+    task_title: template.title,
+    description: template.description || '',
+    tags: templateTags,
+    end_at: new Date(
+      baseForm.start_at.getTime() + Number(template.estimated_hours || 1) * 60 * 60 * 1000
+    ),
+  };
+}
+
 export default function CalendarView() {
   const { data: user } = useCurrentUser();
   const queryClient = useQueryClient();
@@ -129,6 +142,12 @@ export default function CalendarView() {
   const { data: myTimesheets = [] } = useQuery({
     queryKey: ['myTimesheets', user?.id],
     queryFn: () => base44.entities.Timesheet.filter({ user_id: user.id }),
+    enabled: !!user?.id,
+  });
+
+  const { data: allEntries = [] } = useQuery({
+    queryKey: ['allMyEntries', user?.id],
+    queryFn: () => base44.entities.TimeEntry.filter({ user_id: user.id }),
     enabled: !!user?.id,
   });
 
@@ -182,6 +201,69 @@ export default function CalendarView() {
     })),
     [projectsById, weekEntries]
   );
+  const loggedTaskIds = useMemo(
+    () => new Set(allEntries.map((entry) => entry.task_id).filter(Boolean)),
+    [allEntries]
+  );
+
+  const todayIso = format(new Date(), 'yyyy-MM-dd');
+  const currentWeekHours = useMemo(
+    () => hydratedWeekEntries.reduce((sum, entry) => sum + Number(entry.hours || 0), 0),
+    [hydratedWeekEntries]
+  );
+  const activeTaskCount = useMemo(
+    () => myTasks.filter((task) => task.status !== 'completed').length,
+    [myTasks]
+  );
+  const upcomingTaskReminders = useMemo(() => {
+    const soon = new Date();
+    soon.setDate(soon.getDate() + 7);
+
+    return myTasks
+      .filter((task) => task.status !== 'completed' && task.due_date && !loggedTaskIds.has(task.id))
+      .map((task) => ({
+        ...task,
+        dueDateObj: new Date(task.due_date),
+      }))
+      .filter((task) => Number.isFinite(task.dueDateObj.getTime()))
+      .filter((task) => task.dueDateObj <= soon)
+      .sort((left, right) => left.dueDateObj.getTime() - right.dueDateObj.getTime())
+      .slice(0, 4);
+  }, [loggedTaskIds, myTasks]);
+  const overdueTaskCount = useMemo(
+    () => myTasks.filter((task) => task.status !== 'completed' && task.due_date && new Date(task.due_date) < new Date(todayIso)).length,
+    [myTasks, todayIso]
+  );
+  const dueTodayTaskCount = useMemo(
+    () => myTasks.filter((task) => task.status !== 'completed' && task.due_date === todayIso).length,
+    [myTasks, todayIso]
+  );
+  const suggestedTemplates = useMemo(() => templates.slice(0, 6), [templates]);
+  const currentWeekStatusLabel = currentWeekTimesheet
+    ? currentWeekTimesheet.status === 'revoke_pending'
+      ? 'Revocation pending'
+      : currentWeekTimesheet.status === 'approved'
+        ? 'Approved'
+        : currentWeekTimesheet.status === 'pending'
+          ? 'Pending review'
+          : 'Draft'
+    : 'Not started';
+  const currentWeekStatusTone = currentWeekTimesheet
+    ? currentWeekTimesheet.status === 'approved' || currentWeekTimesheet.status === 'revoke_pending'
+      ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+      : currentWeekTimesheet.status === 'pending'
+        ? 'border-amber-200 bg-amber-50 text-amber-800'
+        : 'border-slate-200 bg-slate-50 text-slate-700'
+    : 'border-slate-200 bg-slate-50 text-slate-700';
+  const currentWeekStatusMessage = currentWeekTimesheet
+    ? currentWeekTimesheet.status === 'approved'
+      ? 'This week is approved and locked for editing.'
+      : currentWeekTimesheet.status === 'revoke_pending'
+        ? 'This week is locked while revocation is under review.'
+        : currentWeekTimesheet.status === 'pending'
+          ? 'This week is waiting for admin review.'
+          : 'This week is in draft and still editable.'
+    : 'Start logging time to create a timesheet for this week.';
 
   const setCalendarEntries = (updater) => {
     queryClient.setQueryData(['calendarEntries', user?.id, weekStart, weekEnd], updater);
@@ -307,6 +389,34 @@ export default function CalendarView() {
     onSuccess: () => {
       invalidateCalendarQueries();
       setModalState({ open: false, mode: 'create', entryId: null });
+    },
+  });
+
+  const saveTemplateFromTask = useMutation({
+    mutationFn: async (task) => {
+      const existingTemplate = templates.find((template) => template.title === task.title);
+      if (existingTemplate) {
+        return { template: existingTemplate, created: false };
+      }
+
+      const template = await base44.entities.TaskTemplate.create({
+        user_id: user.id,
+        title: task.title || '',
+        description: task.description || '',
+        estimated_hours: task.estimated_hours || null,
+      });
+      return { template, created: true };
+    },
+    onSuccess: ({ created }, task) => {
+      if (created) {
+        queryClient.invalidateQueries({ queryKey: ['templates'] });
+        toast({
+          title: 'Template saved',
+          description: `"${task.title}" was added to your templates for faster logging.`,
+          centered: true,
+          duration: 2500,
+        });
+      }
     },
   });
 
@@ -465,6 +575,27 @@ export default function CalendarView() {
     setModalState({ open: true, mode: 'create', entryId: null });
   };
 
+  const openTemplateShortcut = (template) => {
+    if (isWeekLocked) return;
+    setForm((current) => buildTemplateEntryForm(template, current));
+    setModalState({ open: true, mode: 'create', entryId: null });
+  };
+
+  const openTaskReminder = (task) => {
+    if (isWeekLocked) return;
+    if (!templates.some((template) => template.title === task.title) && !saveTemplateFromTask.isPending) {
+      saveTemplateFromTask.mutate(task);
+    }
+    setForm((current) => ({
+      ...current,
+      task_id: task.id || '',
+      task_title: task.title || '',
+      project_id: task.project_id || '',
+      project_name: task.project_name || '',
+    }));
+    setModalState({ open: true, mode: 'create', entryId: null });
+  };
+
   const applyTicketToCalendar = (ticketDraft) => {
     setForm(buildCalendarFormFromTicket(ticketDraft, buildNewEntryForm(), projects));
     setModalState({ open: true, mode: 'create', entryId: null });
@@ -583,9 +714,36 @@ export default function CalendarView() {
             title="Calendar"
             description="Clockify-style weekly planning with drag-create, move, resize, and project-linked time entries."
           />
-          <Button onClick={openNewEntryModal} disabled={isWeekLocked} className="gap-2 flex-shrink-0">
-            <Plus className="w-4 h-4" /> Add Entry
-          </Button>
+          <div className="flex flex-col items-end gap-2 flex-shrink-0">
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" onClick={() => setWeekOffset(0)} className="h-9 px-3 text-xs">
+                This week
+              </Button>
+              <Button onClick={openNewEntryModal} disabled={isWeekLocked} className="gap-2">
+                <Plus className="w-4 h-4" /> Add Entry
+              </Button>
+            </div>
+          </div>
+        </div>
+
+        <div className={`rounded-xl border px-4 py-3 ${currentWeekStatusTone}`}>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold">{currentWeekStatusLabel}</p>
+              <p className="mt-1 text-xs opacity-80">{currentWeekStatusMessage}</p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="rounded-full bg-background/70 px-2.5 py-1 text-xs font-medium text-foreground">
+                {currentWeekHours.toFixed(1)}h logged
+              </span>
+              <span className="rounded-full bg-background/70 px-2.5 py-1 text-xs font-medium text-foreground">
+                {activeTaskCount} active tasks
+              </span>
+              <span className="rounded-full bg-background/70 px-2.5 py-1 text-xs font-medium text-foreground">
+                {templates.length} templates
+              </span>
+            </div>
+          </div>
         </div>
 
         {isWeekLocked ? (
@@ -640,6 +798,101 @@ export default function CalendarView() {
                 {option}
               </Button>
             ))}
+          </div>
+        </div>
+
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(320px,0.8fr)]">
+          <div className="space-y-4">
+            <div className="rounded-xl border border-border bg-card p-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <h3 className="text-sm font-semibold text-foreground">Upcoming task reminders</h3>
+                  <p className="text-xs text-muted-foreground">Tasks due soon or already overdue.</p>
+                </div>
+                <span className="text-xs text-muted-foreground">{upcomingTaskReminders.length} shown</span>
+              </div>
+
+              <div className="mt-3 space-y-2">
+                {upcomingTaskReminders.length > 0 ? upcomingTaskReminders.map((task) => {
+                  const isOverdue = task.dueDateObj < new Date(todayIso);
+                  return (
+                    <button
+                      key={task.id}
+                      type="button"
+                      onClick={() => openTaskReminder(task)}
+                      className="w-full rounded-lg border border-border bg-background px-3 py-2 text-left transition-colors hover:border-primary/30 hover:bg-muted/30"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium text-foreground">{task.title}</p>
+                          <p className="mt-0.5 text-xs text-muted-foreground">
+                            {task.project_name || 'No project'}{task.assigned_to_name ? ` • ${task.assigned_to_name}` : ''}
+                          </p>
+                        </div>
+                        <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${isOverdue ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>
+                          {isOverdue ? 'Overdue' : `Due ${format(task.dueDateObj, 'MMM d')}`}
+                        </span>
+                      </div>
+                    </button>
+                  );
+                }) : (
+                  <div className="rounded-lg border border-dashed border-border px-3 py-6 text-center text-sm text-muted-foreground">
+                    No upcoming task deadlines right now.
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-border bg-card p-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <h3 className="text-sm font-semibold text-foreground">Alerts and deadlines</h3>
+                  <p className="text-xs text-muted-foreground">Quick issues to review before logging more time.</p>
+                </div>
+              </div>
+
+              <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                <div className="rounded-lg border border-border bg-background px-3 py-2">
+                  <p className="text-xs text-muted-foreground">Overdue tasks</p>
+                  <p className="mt-1 text-lg font-semibold text-foreground">{overdueTaskCount}</p>
+                </div>
+                <div className="rounded-lg border border-border bg-background px-3 py-2">
+                  <p className="text-xs text-muted-foreground">Due today</p>
+                  <p className="mt-1 text-lg font-semibold text-foreground">{dueTodayTaskCount}</p>
+                </div>
+                <div className="rounded-lg border border-border bg-background px-3 py-2">
+                  <p className="text-xs text-muted-foreground">Week status</p>
+                  <p className="mt-1 text-lg font-semibold text-foreground">{currentWeekStatusLabel}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-border bg-card p-4">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <h3 className="text-sm font-semibold text-foreground">Suggested templates</h3>
+                <p className="text-xs text-muted-foreground">One-click starters for repeated work.</p>
+              </div>
+            </div>
+
+            <div className="mt-3 flex flex-wrap gap-2">
+              {suggestedTemplates.length > 0 ? suggestedTemplates.map((template) => (
+                <button
+                  key={template.id}
+                  type="button"
+                  onClick={() => openTemplateShortcut(template)}
+                  disabled={isWeekLocked}
+                  className="rounded-full border border-border bg-muted/40 px-3 py-1.5 text-xs font-medium transition-colors hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {template.title}
+                </button>
+              )) : (
+                <div className="rounded-lg border border-dashed border-border px-3 py-6 text-center text-sm text-muted-foreground">
+                  Save a task template first to get one-click suggestions here.
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
