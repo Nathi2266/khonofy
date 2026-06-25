@@ -11,6 +11,7 @@ echo "Open deploy PR check (self=${SELF_WORKFLOW}, sha=${DEPLOY_SHA})"
 
 file_requires_backend() {
   case "$1" in
+    backend/package.json) return 1 ;;
     backend/*|.github/workflows/deploy_khonofy-backend-api.yml) return 0 ;;
   esac
   return 1
@@ -18,6 +19,7 @@ file_requires_backend() {
 
 file_requires_frontend() {
   case "$1" in
+    package.json|package-lock.json) return 1 ;;
     src/*|index.html|vite.config.js|tailwind.config.js|postcss.config.js|components.json|jsconfig.json|scripts/*|.github/workflows/azure-static-web-apps-polite-smoke-0f9de4610.yml) return 0 ;;
     public/*)
       [ "$1" != "public/app-version.json" ] && return 0
@@ -103,17 +105,17 @@ all_required_deploys_done() {
 
 BACKEND_REQUIRED=false
 FRONTEND_REQUIRED=false
-mapfile -t changed_files < <(gh api "/repos/${GITHUB_REPOSITORY}/compare/main...deploy" --jq '.files[].filename')
+mapfile -t changed_files < <(gh api "/repos/${GITHUB_REPOSITORY}/commits/${DEPLOY_SHA}" --jq '.files[].filename')
 for file in "${changed_files[@]}"; do
   if file_requires_backend "${file}"; then BACKEND_REQUIRED=true; fi
   if file_requires_frontend "${file}"; then FRONTEND_REQUIRED=true; fi
 done
-echo "Required deploys: backend=${BACKEND_REQUIRED}, frontend=${FRONTEND_REQUIRED}"
+echo "Required deploys for ${DEPLOY_SHA}: backend=${BACKEND_REQUIRED}, frontend=${FRONTEND_REQUIRED}"
 
 for attempt in $(seq 1 "${MAX_ATTEMPTS}"); do
   echo "Attempt ${attempt}/${MAX_ATTEMPTS}"
-  all_required_deploys_done "${BACKEND_REQUIRED}" "${FRONTEND_REQUIRED}"
-  status=$?
+  status=0
+  all_required_deploys_done "${BACKEND_REQUIRED}" "${FRONTEND_REQUIRED}" || status=$?
 
   if [ "${status}" -eq 0 ]; then
     break
