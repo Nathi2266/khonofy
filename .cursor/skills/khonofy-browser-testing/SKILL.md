@@ -11,6 +11,8 @@ description: >-
 
 Use this skill to delegate real-user browser testing for Khonofy.
 
+For coordinated **staff + admin + superuser** runs with handoffs and repair loops, start with [khonofy-test-orchestrator](../khonofy-test-orchestrator/SKILL.md) instead.
+
 ## Purpose
 
 Test the application through the UI exactly like a staff user would:
