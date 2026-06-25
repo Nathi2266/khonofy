@@ -347,7 +347,7 @@ export default function SuperuserDashboard() {
 
   const liveSummary = useMemo(() => [
     { label: 'Blocked tasks', value: blockedTasks.length, tone: blockedTasks.length > 0 ? 'red' : 'green', iconSrc: dashboardIcon13 },
-    { label: 'Pending approvals', value: pendingTimesheets.length, tone: pendingTimesheets.length > 0 ? 'amber' : 'green', iconSrc: dashboardIcon3 },
+    { label: 'Org pending approvals', value: pendingTimesheets.length, tone: pendingTimesheets.length > 0 ? 'amber' : 'green', iconSrc: dashboardIcon3 },
     { label: 'Active projects', value: activeProjects.length, tone: 'primary', iconSrc: dashboardIcon4 },
     { label: 'Recent events', value: recentLogs.length, tone: 'purple', iconSrc: dashboardIcon16 },
   ], [activeProjects.length, blockedTasks.length, pendingTimesheets.length, recentLogs.length]);
@@ -371,7 +371,7 @@ export default function SuperuserDashboard() {
           {[
             { label: 'Staff', value: staffUsers.length, iconSrc: dashboardIcon1 },
             { label: 'Projects', value: allProjects.length, iconSrc: dashboardIcon2 },
-            { label: 'Pending', value: pendingTimesheets.length, iconSrc: dashboardIcon3 },
+            { label: 'Org Pending', value: pendingTimesheets.length, iconSrc: dashboardIcon3 },
             { label: 'Activity', value: recentLogs.length, iconSrc: dashboardIcon4 },
           ].map((item) => (
             <div key={item.label} className="flex flex-col items-center rounded-2xl border border-border bg-card px-3 py-3 text-center shadow-sm">
@@ -416,12 +416,12 @@ export default function SuperuserDashboard() {
             series={projectSeries}
           />
           <KpiCard
-            label="Pending Approvals"
+            label="Org Pending Approvals"
             value={pendingTimesheets.length}
             iconSrc={dashboardIcon3}
             tone="amber"
             trend={approvalsTrend}
-            note="Timesheets awaiting review."
+            note="Organization-wide timesheets awaiting review."
             series={approvalsSeries}
           />
           <KpiCard
@@ -444,7 +444,7 @@ export default function SuperuserDashboard() {
             </div>
             <div>
               <p className="text-sm font-semibold text-foreground">
-                {pendingTimesheets.length} timesheet{pendingTimesheets.length > 1 ? 's' : ''} are waiting for approval
+                {pendingTimesheets.length} timesheet{pendingTimesheets.length > 1 ? 's' : ''} awaiting approval organization-wide
               </p>
               <p className="mt-1 text-xs text-muted-foreground">
                 Keep an eye on approvals to maintain flow across the teams.

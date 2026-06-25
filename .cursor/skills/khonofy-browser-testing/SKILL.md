@@ -1,10 +1,9 @@
 ---
 name: khonofy-browser-testing
 description: >-
-  Khonofy browser user testing for end-to-end UI validation. Use when a
-  subordinate agent needs to log in, navigate the app like a real user,
-  create time entries or calendar items, verify totals, and submit a
-  timesheet from the browser only.
+  Khonofy browser user testing for end-to-end UI validation and improvement
+  review. Use when an agent needs to log in, navigate like a real user, verify
+  timesheet flows, and report Bug/Polish/Optimization findings from the UI.
 ---
 
 # Khonofy Browser User Testing
@@ -23,6 +22,23 @@ Test the application through the UI exactly like a staff user would:
 - verify totals on the calendar and timesheet views
 - submit the timesheet
 - report any visible errors or mismatches with exact steps
+- **suggest improvements** (Bug / Polish / Optimization) even when the flow passes
+
+## Improvement review mode
+
+When running staff smoke tests, also capture product improvements:
+
+| Category | Meaning |
+|----------|---------|
+| **Bug** | Broken or misleading behavior |
+| **Polish** | Works; clearer labels, loading, or empty states would help |
+| **Optimization** | Works; fewer clicks or better defaults would help |
+
+Focus areas: faster time entry, clearer week labels, better totals display, submit status visibility.
+
+Per flow, report what worked, what felt awkward, concrete ideas (with effort), and whether worth implementing now.
+
+See [khonofy-staff-tester](../khonofy-staff-tester/SKILL.md) for full improvement review rules.
 
 ## Scope
 
@@ -111,6 +127,7 @@ Return a concise report containing:
 - total hours observed
 - submission result
 - bugs or mismatches found
+- **improvement findings** (`bug` / `polish` / `optimization`) with effort and worth-now note
 - screenshots or UI notes if available
 
 ## Browser agent prompt
@@ -138,8 +155,8 @@ Use this prompt when delegating to a browser-testing agent:
 > - Do not assume saves worked unless the interface confirms it.
 > - If there is an error, stop and report the exact page, action, and message.
 > - If you need to choose a day or week, use the current visible UI context.
-> - Provide a final summary with pass/fail, steps taken, totals observed, and any bugs.
+> - Provide a final summary with pass/fail, steps taken, totals observed, bugs, and improvement suggestions (bug/polish/optimization).
 
 ## Quality bar
 
-A successful run means the agent verified the full user journey end to end and did not rely on hidden state or assumptions.
+A successful run means the agent verified the full user journey end to end, did not rely on hidden state or assumptions, and captured improvement ideas when the flow passes but UX could be better.
