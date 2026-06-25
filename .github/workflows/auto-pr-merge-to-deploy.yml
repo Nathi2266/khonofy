@@ -1,7 +1,5 @@
-# 1. Push feature branch -> CI -> PR into deploy -> auto-merge into deploy
-# 2. Bump version on deploy -> trigger backend and/or frontend Azure deploy workflows
-# 3. When required deploy workflows finish -> open PR deploy -> main (manual merge)
-name: Auto PR merge to deploy
+# Feature branch push -> CI -> promote into deploy -> version bump -> deploy workflows -> PR deploy to main
+name: Promote feature branches to deploy
 
 on:
   push:
