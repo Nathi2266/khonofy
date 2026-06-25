@@ -76,6 +76,22 @@ const base44 = createClient({
 });
 ```
 
+
+## Release flow
+
+Khonofy uses a staged GitHub Actions release pipeline:
+
+```text
+feature branch -> CI -> deploy branch -> Azure deploys -> PR to main
+```
+
+### What happens on a feature push
+- CI runs lint, typecheck, build, and dist verification
+- The branch is promoted into `deploy`
+- Version files are bumped on `deploy`
+- Frontend and/or backend deploy workflows run when relevant files change
+- A PR from `deploy` to `main` is opened for manual final promotion
+
 ## Docs
 
 - [Base44 + GitHub](https://docs.base44.com/Integrations/Using-GitHub)
