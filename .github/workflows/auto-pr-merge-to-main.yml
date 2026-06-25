@@ -21,8 +21,11 @@ concurrency:
 
 jobs:
   ci:
+    name: CI
     uses: ./.github/workflows/ci.yml
-    secrets: inherit
+    secrets:
+      VITE_API_URL: ${{ secrets.VITE_API_URL }}
+      VITE_SENTRY_DSN: ${{ secrets.VITE_SENTRY_DSN }}
 
   promote-via-deploy:
     needs: ci
@@ -157,8 +160,9 @@ jobs:
       - name: Refresh CI dist for deploy branch
         if: steps.merge.outputs.merged == 'true' && steps.changes.outputs.frontend == 'true'
         run: |
-          chmod +x scripts/prepare-frontend-dist-for-deploy.sh
+          chmod +x scripts/prepare-frontend-dist-for-deploy.sh scripts/verify-frontend-dist.sh
           scripts/prepare-frontend-dist-for-deploy.sh frontend-dist
+          scripts/verify-frontend-dist.sh dist
 
       - name: Upload frontend dist for Azure deploy
         if: steps.merge.outputs.merged == 'true' && steps.changes.outputs.frontend == 'true'
