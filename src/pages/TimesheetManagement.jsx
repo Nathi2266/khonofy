@@ -23,21 +23,16 @@ import dashboardIcon10 from '@/assets/images/dashboard/10.png';
 import dashboardIcon18 from '@/assets/images/dashboard/18.png';
 import { Send, ChevronDown, Undo2, RotateCcw } from 'lucide-react';
 import { toast } from '@/components/ui/use-toast';
+import {
+  findTimesheetForWeek,
+  formatWeekRangeLabel,
+  getLocalToday,
+  getWeekBounds,
+  getWeekDayDates,
+  parseWeekDate,
+} from '@/utils/weekBounds';
 
 const REVOKE_WINDOW_MS = 24 * 60 * 60 * 1000;
-
-function getWeekBounds(offset = 0) {
-  const now = new Date();
-  const day = now.getDay();
-  const monday = new Date(now);
-  monday.setDate(now.getDate() - (day === 0 ? 6 : day - 1) + offset * 7);
-  const sunday = new Date(monday);
-  sunday.setDate(monday.getDate() + 6);
-  return {
-    start: monday.toISOString().split('T')[0],
-    end: sunday.toISOString().split('T')[0],
-  };
-}
 
 function getReviewedAt(timesheet) {
   if (timesheet.reviewed_at) return new Date(timesheet.reviewed_at);
@@ -109,7 +104,7 @@ export default function TimesheetManagement() {
     departments.find((department) => department.id === user?.department_id)?.weekly_hour_target || 0
   );
 
-  const currentSheet = timesheets.find((timesheet) => timesheet.week_start === week.start);
+  const currentSheet = findTimesheetForWeek(timesheets, week);
   const totalHours = timeEntries.reduce((sum, entry) => sum + (entry.hours || 0), 0);
   const hasAssignedAdmin = !!user?.admin_id;
   const currentSheetStatus = currentSheet?.status || 'draft';
@@ -147,6 +142,7 @@ export default function TimesheetManagement() {
     },
   ];
   const blockedChecklistItems = readinessChecklist.filter((item) => !item.passed);
+  const showReadinessChecklist = !currentSheet || currentSheetStatus === 'draft' || currentSheetStatus === 'rejected';
   const isLocked = currentSheetStatus === 'approved' || currentSheetStatus === 'revoke_pending';
   const lockReason = currentSheetStatus === 'approved'
     ? 'This timesheet is locked because it has been approved.'
@@ -243,12 +239,7 @@ export default function TimesheetManagement() {
     return acc;
   }, {});
 
-  const dayLabels = [];
-  for (let index = 0; index < 7; index += 1) {
-    const date = new Date(week.start);
-    date.setDate(date.getDate() + index);
-    dayLabels.push(date.toISOString().split('T')[0]);
-  }
+  const dayLabels = getWeekDayDates(week.start);
 
   const meetsHourTarget = !weeklyHourTarget || totalHours >= weeklyHourTarget;
   const canSubmit = hasAssignedAdmin
@@ -289,11 +280,19 @@ export default function TimesheetManagement() {
               </button>
               <div className="text-center">
                 <p className="text-sm font-medium text-foreground">
-                  Week of {new Date(week.start).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                  {' – '}
-                  {new Date(week.end).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                  {formatWeekRangeLabel(week.start, week.end)}
                 </p>
-                {weekOffset === 0 ? <p className="text-xs text-muted-foreground">Current week</p> : null}
+                {weekOffset === 0 ? (
+                  <p className="text-xs text-muted-foreground">Current week</p>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setWeekOffset(0)}
+                    className="mt-0.5 text-xs font-medium text-primary hover:underline"
+                  >
+                    Jump to current week
+                  </button>
+                )}
               </div>
               <button
                 onClick={() => setWeekOffset(weekOffset + 1)}
@@ -314,6 +313,7 @@ export default function TimesheetManagement() {
             </div>
           </div>
 
+          {showReadinessChecklist ? (
           <div className="mb-4 rounded-xl border border-border bg-muted/20 px-4 py-3">
             <div className="flex items-center justify-between gap-3">
               <div>
@@ -340,6 +340,7 @@ export default function TimesheetManagement() {
               ))}
             </div>
           </div>
+          ) : null}
 
           {currentSheet?.status === 'pending' ? (
             <div className="mb-4 rounded-xl border border-border bg-background px-4 py-3 text-sm text-muted-foreground">
@@ -420,8 +421,8 @@ export default function TimesheetManagement() {
             {dayLabels.map((dateStr) => {
               const entries = byDate[dateStr] || [];
               const dayHours = entries.reduce((sum, entry) => sum + (entry.hours || 0), 0);
-              const dayName = new Date(dateStr).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-              const isToday = dateStr === new Date().toISOString().split('T')[0];
+              const dayName = parseWeekDate(dateStr).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+              const isToday = dateStr === getLocalToday();
               const hasEntries = entries.length > 0;
               return (
                 <div key={dateStr} className={`rounded-xl border ${isToday ? 'border-primary/20 bg-primary/5' : 'border-border bg-background'}`}>
@@ -489,9 +490,7 @@ export default function TimesheetManagement() {
               <div key={timesheet.id} className="flex items-center justify-between rounded-xl border border-border bg-background px-4 py-3">
                 <div>
                   <p className="text-sm font-medium text-foreground">
-                    {new Date(timesheet.week_start).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                    {' – '}
-                    {new Date(timesheet.week_end).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                    {formatWeekRangeLabel(timesheet.week_start, timesheet.week_end)}
                   </p>
                   <p className="text-xs text-muted-foreground">{timesheet.total_hours || 0}h logged</p>
                   {timesheet.withdrawn_at ? (
