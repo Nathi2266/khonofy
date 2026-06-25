@@ -98,51 +98,17 @@ jobs:
         run: |
           chmod +x scripts/prepare-frontend-dist-for-deploy.sh scripts/verify-frontend-dist.sh
           scripts/prepare-frontend-dist-for-deploy.sh frontend-dist-deploy
+          rm -rf frontend-dist-deploy
 
-      - name: Shrink workspace for prebuilt deploy
-        if: github.event_name == 'workflow_dispatch' && inputs.caller_run_id != ''
-        run: |
-          set -euo pipefail
-          mkdir -p deploy-upload
-          cp -a dist/. deploy-upload/
-          if [ -f public/staticwebapp.config.json ]; then
-            cp public/staticwebapp.config.json deploy-upload/staticwebapp.config.json
-          fi
-          find . -mindepth 1 -maxdepth 1 ! -name 'deploy-upload' -exec rm -rf {} +
-          mv deploy-upload dist
-          echo "Workspace reduced to dist only ($(du -sh dist | cut -f1))."
-
-      - name: Install OIDC Client from Core Package
+      - name: Set up Node.js
         if: github.event_name != 'workflow_dispatch' || inputs.caller_run_id == ''
-        run: npm install @actions/core@1.6.0 @actions/http-client
-
-      - name: Get Id Token
-        if: github.event_name != 'workflow_dispatch' || inputs.caller_run_id == ''
-        uses: actions/github-script@v6
-        id: idtoken
+        uses: actions/setup-node@v4
         with:
-          script: return await core.getIDToken()
-          result-encoding: string
-
-      - name: Deploy prebuilt frontend dist
-        if: github.event_name == 'workflow_dispatch' && inputs.caller_run_id != ''
-        id: builddeploy
-        uses: Azure/static-web-apps-deploy@v1
-        env:
-          VITE_APP_VERSION: ${{ needs.set-app-version.outputs.app_version }}
-          SENTRY_RELEASE: ${{ needs.set-app-version.outputs.app_version }}
-        with:
-          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_POLITE_SMOKE_0F9DE4610 }}
-          action: "upload"
-          app_location: "/"
-          api_location: ""
-          app_artifact_location: "dist"
-          skip_app_build: true
+          node-version: '20.x'
+          cache: 'npm'
 
       - name: Build frontend for deploy
         if: github.event_name != 'workflow_dispatch' || inputs.caller_run_id == ''
-        id: builddeploy
-        uses: Azure/static-web-apps-deploy@v1
         env:
           VITE_API_URL: ${{ secrets.VITE_API_URL }}
           VITE_SENTRY_DSN: ${{ secrets.VITE_SENTRY_DSN }}
