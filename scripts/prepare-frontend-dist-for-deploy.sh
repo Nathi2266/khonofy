@@ -21,4 +21,6 @@ if [ -f public/staticwebapp.config.json ] && [ ! -f dist/staticwebapp.config.jso
   cp public/staticwebapp.config.json dist/staticwebapp.config.json
 fi
 
+bash scripts/verify-frontend-dist.sh dist
+
 echo "Prepared dist for deploy ($(find dist -type f | wc -l) files, $(du -sh dist | cut -f1))."

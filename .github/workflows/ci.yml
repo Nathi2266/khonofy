@@ -4,6 +4,11 @@ name: CI
 
 on:
   workflow_call:
+    secrets:
+      VITE_API_URL:
+        required: false
+      VITE_SENTRY_DSN:
+        required: false
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
@@ -36,6 +41,11 @@ jobs:
           VITE_SENTRY_DSN: ${{ secrets.VITE_SENTRY_DSN }}
           VITE_SENTRY_ENVIRONMENT: production
         run: npm run build
+
+      - name: Verify production dist output
+        run: |
+          chmod +x scripts/verify-frontend-dist.sh
+          scripts/verify-frontend-dist.sh dist
 
       - name: Upload frontend dist for deploy
         uses: actions/upload-artifact@v4
