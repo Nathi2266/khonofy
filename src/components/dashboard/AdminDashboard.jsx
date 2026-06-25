@@ -87,7 +87,7 @@ export default function AdminDashboard({ user }) {
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         <StatsCard label="Team Members" value={assignedStaff.length} iconSrc={dashboardIcon1} color="primary" />
         <StatsCard label="Open Tasks" value={openTasks} iconSrc={dashboardIcon4} color="amber" />
-        <StatsCard label="Pending Approvals" value={pendingTimesheets.length} iconSrc={dashboardIcon3} color="red" sub="timesheets awaiting" />
+        <StatsCard label="Team Pending" value={pendingTimesheets.length} iconSrc={dashboardIcon3} color="red" sub="in your review queue" />
         <StatsCard label="Revoke Requests" value={revokePendingTimesheets.length} iconSrc={dashboardIcon18} color="amber" sub="need your decision" />
         <StatsCard
           label="Completion Rate"
