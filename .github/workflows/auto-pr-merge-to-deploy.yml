@@ -1,7 +1,5 @@
-# 1. Push feature branch -> CI -> PR into deploy -> auto-merge into deploy
-# 2. Bump version on deploy -> trigger backend and/or frontend Azure deploy workflows
-# 3. When required deploy workflows finish -> open PR deploy -> main (manual merge)
-name: Auto PR merge to deploy
+# Feature branch push -> CI -> promote into deploy -> version bump -> deploy workflows -> PR deploy to main
+name: Promote feature branches to deploy
 
 on:
   push:
@@ -77,50 +75,19 @@ jobs:
         id: merge
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
           SOURCE_BRANCH: ${{ steps.branch.outputs.name }}
           TARGET_BRANCH: deploy
         run: |
           set -euo pipefail
-
-          AHEAD_BY="$(gh api "/repos/${GITHUB_REPOSITORY}/compare/${TARGET_BRANCH}...${SOURCE_BRANCH}" --jq '.ahead_by')"
-          if [ "${AHEAD_BY}" -eq 0 ]; then
+          chmod +x scripts/merge-feature-into-deploy.sh
+          OUTPUT="$(scripts/merge-feature-into-deploy.sh)"
+          printf '%s\n' "${OUTPUT}"
+          if printf '%s\n' "${OUTPUT}" | grep -q '^merged=false$'; then
             echo "merged=false" >> "$GITHUB_OUTPUT"
-            echo "No commits to merge from ${SOURCE_BRANCH} into ${TARGET_BRANCH}."
-            exit 0
+          else
+            echo "merged=true" >> "$GITHUB_OUTPUT"
           fi
-
-          EXISTING_PR="$(gh pr list \
-            --repo "${GITHUB_REPOSITORY}" \
-            --base "${TARGET_BRANCH}" \
-            --head "${SOURCE_BRANCH}" \
-            --state open \
-            --json number \
-            --jq '.[0].number // empty')"
-
-          if [ -z "${EXISTING_PR}" ]; then
-            gh pr create \
-              --repo "${GITHUB_REPOSITORY}" \
-              --base "${TARGET_BRANCH}" \
-              --head "${SOURCE_BRANCH}" \
-              --title "Merge ${SOURCE_BRANCH} into ${TARGET_BRANCH}" \
-              --body "Automated PR promoting \`${SOURCE_BRANCH}\` into \`${TARGET_BRANCH}\`."
-
-            EXISTING_PR="$(gh pr list \
-              --repo "${GITHUB_REPOSITORY}" \
-              --base "${TARGET_BRANCH}" \
-              --head "${SOURCE_BRANCH}" \
-              --state open \
-              --json number \
-              --jq '.[0].number')"
-          fi
-
-          gh pr merge "${EXISTING_PR}" \
-            --repo "${GITHUB_REPOSITORY}" \
-            --merge \
-            --delete-branch=false
-
-          echo "merged=true" >> "$GITHUB_OUTPUT"
-          echo "Merged PR #${EXISTING_PR}: ${SOURCE_BRANCH} -> ${TARGET_BRANCH}"
 
       - name: Bump semantic version on deploy
         if: steps.merge.outputs.merged == 'true'
