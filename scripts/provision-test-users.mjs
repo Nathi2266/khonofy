@@ -66,6 +66,32 @@ async function createUser(apiBase, token, payload) {
   });
 }
 
+async function listDepartments(apiBase, token) {
+  return requestJson(`${apiBase}/api/departments`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+async function resolveDepartment(apiBase, token) {
+  const configuredId = process.env.KHONOFY_TEST_DEPARTMENT_ID?.trim();
+  if (configuredId) {
+    return { id: configuredId, name: process.env.KHONOFY_TEST_DEPARTMENT_NAME || null };
+  }
+
+  const departments = await listDepartments(apiBase, token);
+  const department = departments.find((item) => item.is_active !== false) || departments[0];
+  if (!department) {
+    throw new Error(
+      'No departments found. Seed departments or set KHONOFY_TEST_DEPARTMENT_ID.'
+    );
+  }
+
+  return {
+    id: department.id,
+    name: department.name || null,
+  };
+}
+
 async function main() {
   const runId = process.env.KHONOFY_TEST_RUN_ID || buildRunId();
   const apiBase = normalizeApiBase(process.env.KHONOFY_API_URL || process.env.VITE_API_URL);
@@ -81,12 +107,14 @@ async function main() {
   };
 
   const { token } = await login(apiBase, bootstrapEmail, bootstrapPassword);
+  const department = await resolveDepartment(apiBase, token);
 
   const admin = await createUser(apiBase, token, {
     email: emails.admin,
     fullName: `Test Admin ${runId}`,
     password: TEST_PASSWORD,
     role: 'admin',
+    department_id: department.id,
   });
 
   const staff = await createUser(apiBase, token, {
@@ -95,6 +123,7 @@ async function main() {
     password: TEST_PASSWORD,
     role: 'staff',
     admin_id: admin.id,
+    department_id: department.id,
   });
 
   const superuser = await createUser(apiBase, token, {
@@ -110,6 +139,10 @@ async function main() {
     password: TEST_PASSWORD,
     provisionedAt: new Date().toISOString(),
     bootstrapSuperuser: bootstrapEmail,
+    department: {
+      id: department.id,
+      name: department.name,
+    },
     superuser: {
       email: emails.superuser,
       id: superuser.id,
@@ -121,6 +154,7 @@ async function main() {
       id: admin.id,
       fullName: admin.full_name || admin.fullName,
       role: 'admin',
+      departmentId: department.id,
     },
     staff: {
       email: emails.staff,
@@ -129,6 +163,7 @@ async function main() {
       role: 'staff',
       adminId: admin.id,
       adminEmail: emails.admin,
+      departmentId: department.id,
     },
   };
 
