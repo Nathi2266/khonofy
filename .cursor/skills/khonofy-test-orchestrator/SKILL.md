@@ -1,10 +1,9 @@
 ---
 name: khonofy-test-orchestrator
 description: >-
-  Coordinates dual-purpose Khonofy browser testing — verify correctness and
-  collect Bug/Polish/Optimization improvements from staff, admin, and superuser
-  agents. Page coverage, role handoffs, senior-dev triage, and repair reruns.
-  Use as the entry point for full multi-role E2E and improvement review runs.
+  Coordinates dual-purpose Khonofy browser testing with a continuous improvement
+  loop — verify correctness, collect improvements, senior-dev upgrades, rerun
+  until stable. Does not stop on pass alone.
 ---
 
 # Khonofy Test Orchestrator
@@ -20,6 +19,7 @@ Coordinate three real-user browser testing agents plus a senior developer repair
 | [Khonofy-Staff-Tester](../khonofy-staff-tester/SKILL.md) | All staff-visible pages, controls, and flows |
 | [Khonofy-Admin-Tester](../khonofy-admin-tester/SKILL.md) | All admin-visible pages, controls, and handoffs |
 | [Khonofy-Superuser-Tester](../khonofy-superuser-tester/SKILL.md) | All superuser pages, audit, and cross-role checks |
+| [Khonofy-Test-Provision](../khonofy-test-provision/SKILL.md) | **Step 0** — fresh staff, admin, superuser per run |
 | [Senior-Dev_khonofy](../senior-dev-khonofy/SKILL.md) | Bug fixes and wise upgrade selection from tester suggestions |
 
 Also see [khonofy-browser-testing](../khonofy-browser-testing/SKILL.md) for focused staff timesheet smoke tests and [khonofy-domain](../khonofy-domain/SKILL.md) for business rules.
@@ -85,6 +85,55 @@ The senior developer should prioritize suggestions using:
 3. **Defer** useful but not urgent ideas.
 4. **Reject** noisy, subjective, or low-value churn unless clarity improves materially.
 5. **After any upgrade**, rerun the affected tests and confirm the improvement.
+
+## Continuous improvement loop
+
+**A passing test suite is not the end of the workflow; it is the start of improvement review.** The suite continues until bugs are fixed, worthwhile UX/code upgrades are applied, and reruns confirm the changes.
+
+This is a **continuous improvement loop**, not a stop-on-pass test.
+
+### Situation → action
+
+| Situation | What happens |
+|-----------|----------------|
+| Tests **fail** | Senior dev fixes the issue → agents rerun affected pages/flows |
+| Tests **pass** but suggestions exist | Senior dev reviews suggestions → implements high-value upgrades → agents rerun |
+| Tests **pass** and **no suggestions** exist | Orchestrator may finish the cycle |
+
+A passing run does **not** automatically end the cycle. Keep the loop alive while worthwhile `polish` or `optimization` items remain for the current cycle.
+
+### Cycle end conditions
+
+End the cycle only when **both** are true:
+
+1. **No open bugs** — all `needs_fix` items resolved and rerun confirmed.
+2. **No high-value improvements left** — senior dev has implemented, deferred, or rejected every item; deferred/rejected items are documented; reruns confirm implemented changes.
+
+Low-value or deferred items do **not** block cycle completion unless the orchestrator explicitly starts another improvement pass.
+
+### Operating cycle
+
+```
+Staff / Admin / Superuser testers
+        ↓  bugs + polish + optimization (even on pass)
+Orchestrator consolidates reports
+        ↓
+Senior-Dev_khonofy — triage → implement high-value upgrades
+        ↓
+Verify (lint/typecheck) + notify orchestrator
+        ↓
+Rerun impacted pages/flows → testers confirm
+        ↓
+New observations? → loop again
+        ↓
+No bugs + no high-value backlog → final report
+```
+
+### Example
+
+Staff reports: login works, dashboard works, but week labels are confusing.
+
+The process is **not done**. Senior dev fixes labels → orchestrator reruns staff `/`, `/calendar`, `/timesheets` → testers note new observations → loop continues if needed.
 
 ### Khonofy improvement buckets
 
@@ -216,24 +265,30 @@ findings:
 
 - If one agent completes a workflow another must continue, send `handoff_ready` and wait.
 - If any agent finds a code defect, send `needs_fix` to Senior-Dev_khonofy and pause the affected page/flow.
-- If an agent finds improvements on a **passing** page, include them in `findings` and forward to orchestrator (do not block the run).
-- After Senior-Dev_khonofy reports a fix or implemented improvement, rerun the affected page and connected flow only.
+- If an agent finds improvements on a **passing** page, include them in `findings` and forward to orchestrator — **never treat pass as cycle complete**.
+- After Senior-Dev_khonofy reports a fix or implemented improvement, rerun the affected page and connected flow, then **continue the loop** if new findings appear.
 
 ## Orchestration workflow
 
-1. Confirm test environment URL and credentials for staff, admin, and superuser.
+0. **Provision fresh test users (mandatory)** — run [khonofy-test-provision](../khonofy-test-provision/SKILL.md):
+   - `npm run test:provision` (or `node scripts/provision-test-users.mjs` with `KHONOFY_API_URL` set)
+   - Creates new staff, admin, and superuser; password **`Demo123!`** for all three
+   - Staff is assigned to the new admin (`admin_id`)
+   - Read `.cursor/test-run-credentials.json` and pass emails to each role tester
+   - Do **not** reuse Wandile/David/Ali or prior-run credentials for routine suite runs
+1. Confirm test environment URL (frontend) and provisioned credentials for staff, admin, and superuser.
 2. Open browser visibly if requested (`position: "active"`).
-3. **Staff Tester** — Layers 1–4 on all staff pages; Layer 2 timesheet submit → handoff.
-4. **Admin Tester** — Layers 1–4 on all admin pages; process staff handoff (approve/reject).
-5. **Staff Tester** (brief) — verify post-review status on Timesheets if handoff requires it.
-6. **Superuser Tester** — Layers 1–4 on all superuser pages; cross-role consistency; improvement findings.
-7. **Consolidate improvements** — merge bug/polish/optimization from all testers; dedupe; prioritize.
-8. Any `needs_fix` → **Senior-Dev_khonofy** → fix bugs first.
-9. **Senior-Dev_khonofy** — triage improvements; implement high-value upgrades; defer/reject others.
-10. **Rerun** — affected pages/flows after fixes or implemented improvements; testers confirm.
-11. Produce **final consolidated coverage + improvement report**.
+3. **Run all role testers** — Layers 1–4 + improvement findings on every page.
+4. **Consolidate** — merge bug/polish/optimization; dedupe; prioritize.
+5. **If any failures** → `needs_fix` to Senior-Dev_khonofy → fix → rerun → return to step 3 for affected scope.
+6. **If passes with suggestions** → forward backlog to Senior-Dev_khonofy → **do not stop**.
+7. **Senior-Dev_khonofy** — triage; implement high-value upgrades; defer/reject others with reasons.
+8. **Rerun** impacted pages/flows; testers confirm upgrades and capture new observations.
+9. **Loop** — if new bugs or high-value suggestions appear, return to step 4.
+10. **Finish** only when cycle end conditions are met (see Continuous improvement loop).
+11. Produce **final consolidated coverage + improvement report** (including implemented, deferred, rejected, and rerun results).
 
-## Living quality loop
+## Living quality loop (summary)
 
 ```
 Testers (all roles) → report pass/fail + bug/polish/optimization
@@ -254,6 +309,12 @@ Final report (coverage + implemented + deferred + rejected)
 Copy and track:
 
 ```
+Provisioning (Step 0 — every run)
+- [ ] Fresh staff, admin, superuser created via test:provision
+- [ ] All three passwords are Demo123!
+- [ ] Staff admin_id points to new admin
+- [ ] Credentials written to .cursor/test-run-credentials.json
+
 Authentication
 - [ ] Login
 - [ ] Register (smoke / validation only if in scope)
@@ -305,9 +366,11 @@ Repair loop
 Improvement review
 - [ ] Each tester reports bug / polish / optimization per page
 - [ ] Orchestrator consolidates and dedupes findings
+- [ ] Forward worthwhile suggestions to Senior-Dev_khonofy even when all tests pass
 - [ ] Senior dev triages: implement / defer / reject
 - [ ] High-value upgrades implemented with minimal diffs
 - [ ] Impacted flows rerun and improvement confirmed
+- [ ] Loop repeats until no bugs and no high-value backlog remain
 - [ ] Deferred and rejected items listed with reasons
 ```
 
@@ -321,6 +384,7 @@ Improvement review
 6. Route code defects to Senior-Dev_khonofy; route improvements to senior dev for triage — do not guess at fixes during testing.
 7. Use slow typing for React controlled inputs — `browser_fill` alone can leave login stuck.
 8. A **passing page** must still include improvement findings when warranted — empty improvement sections are OK only when nothing useful was observed.
+9. **Do not end the cycle on pass alone** — continue while senior dev has high-value improvements to implement or verify.
 
 ## Test environment defaults
 
@@ -328,9 +392,22 @@ Improvement review
 |------|---------------|
 | Deployed frontend | `https://polite-smoke-0f9de4610.7.azurestaticapps.net` |
 | Local frontend | `http://localhost:5173` |
-| Backend (production) | Baked into `VITE_API_URL` at deploy time |
+| Local backend | `http://localhost:3001` |
+| Production backend | `https://khonofy-backend-api-d2fscwb7f3aeevac.southafricanorth-01.azurewebsites.net` |
 
-Credentials are always provided in the task — never hardcode passwords in skills.
+## Test credentials (per run)
+
+**Every suite run starts with Step 0 provisioning.** Do not hardcode role-tester emails in skills.
+
+| Role | Source | Password |
+|------|--------|----------|
+| Staff | `.cursor/test-run-credentials.json` → `staff.email` | `Demo123!` |
+| Admin | `.cursor/test-run-credentials.json` → `admin.email` | `Demo123!` |
+| Superuser | `.cursor/test-run-credentials.json` → `superuser.email` | `Demo123!` |
+
+Bootstrap superuser (provision only, not for role testing): `ali.khan@khonology.com` / `Demo123!` unless overridden via env.
+
+Pass `runId`, all three emails, and `Demo123!` in each role-tester handoff.
 
 ## Final output (reporting requirement)
 
@@ -349,4 +426,4 @@ The orchestrator must produce:
 
 ## Quality bar
 
-A successful orchestrated run means each role agent completed its in-scope page and control coverage (or cleanly reported blockers), cross-role handoffs were verified in the UI, broken controls were escalated with evidence, improvements were collected even from passing pages, any fixes/upgrades were validated by targeted reruns, and the final report includes both coverage and a prioritized improvement backlog.
+A successful orchestrated run means each role agent completed its in-scope coverage, cross-role handoffs were verified, broken controls were escalated, improvements were collected from passing pages, the **continuous improvement loop ran to completion** (bugs fixed, high-value upgrades implemented and rerun-confirmed), and the final report documents implemented, deferred, and rejected items.

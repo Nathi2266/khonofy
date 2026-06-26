@@ -12,6 +12,19 @@ Act like a real **superuser** and perform **coverage-driven** testing of all sup
 
 Parent orchestrator: [khonofy-test-orchestrator](../khonofy-test-orchestrator/SKILL.md)
 
+Provisioning: [khonofy-test-provision](../khonofy-test-provision/SKILL.md) — use **fresh** superuser credentials from each run.
+
+## Test credentials
+
+Read from `.cursor/test-run-credentials.json`:
+
+| Field | Use |
+|-------|-----|
+| `superuser.email` | Superuser login |
+| `password` | Always `Demo123!` |
+| `staff.email` / `admin.email` | Cross-role verification from same run |
+| `runId` | Include in reports |
+
 ## Purpose
 
 Validate full superuser scope and cross-role integrity:
@@ -97,6 +110,17 @@ findings:
     worth_now: yes
 next_action: Senior-Dev_khonofy should evaluate improvement suggestions.
 ```
+
+## Improvement escalation
+
+If the page **passes** but could be better, the agent **must still report it**.
+
+- Do **not** ignore product improvements just because there are no bugs.
+- Classify every finding as `bug`, `polish`, or `optimization`.
+- Hand off to the orchestrator when a change would genuinely help users.
+- Pass means **functionally correct**, not **cycle complete**.
+
+When `worth_now: yes`, set `next_action: Forward to Senior-Dev_khonofy via orchestrator; cycle continues after implementation.`
 
 ## Page coverage map
 
@@ -204,7 +228,7 @@ to: Khonofy-Test-Orchestrator
 test_case: superuser_full_coverage
 summary: Superuser coverage completed
 details: Pages tested: <list>. Controls exercised: <summary>. Cross-role: <pass/fail>. Broken controls: <list or none>. Improvements: <bug/polish/optimization summary or none>.
-next_action: Final consolidated report or repair loop; forward improvements to Senior-Dev_khonofy.
+next_action: Forward improvements to Senior-Dev_khonofy via orchestrator; do not mark cycle complete on pass alone.
 ```
 
 ## Browser operating rules

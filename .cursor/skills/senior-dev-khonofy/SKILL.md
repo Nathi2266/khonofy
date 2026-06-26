@@ -116,6 +116,19 @@ findings:
 next_action: Senior-Dev_khonofy should evaluate improvement suggestions.
 ```
 
+## Improvement triage
+
+When tests **pass** but testers report `polish` or `optimization` ideas, **evaluate them anyway** — do not skip triage because there are no failures.
+
+1. Read every suggestion from the orchestrator backlog.
+2. Apply **wise upgrade selection** (implement / defer / reject).
+3. **Implement high-value changes first** — high impact, low risk, clear benefit.
+4. Verify each change (`npm run lint`, `npm run typecheck`; browser check when feasible).
+5. Notify orchestrator with triage report and **explicit rerun scope**.
+6. **Request rerun** of affected pages/flows — the cycle continues until upgrades are confirmed.
+
+If all suggestions are deferred or rejected with documented reasons, tell the orchestrator the improvement set for this cycle is complete.
+
 ## Workflow
 
 1. **Receive** reports from all three role testers (via orchestrator).
@@ -198,7 +211,7 @@ details:
   implemented: <list with files>
   deferred: <list with reasons>
   rejected: <list with reasons>
-next_action: Rerun affected pages; testers confirm improvements.
+next_action: Rerun affected pages; testers confirm improvements; orchestrator continues loop if new findings appear.
 ```
 
 Human-readable section:
