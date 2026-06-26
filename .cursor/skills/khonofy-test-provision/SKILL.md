@@ -10,6 +10,8 @@ description: >-
 
 **Mandatory Step 0** for every orchestrated test run. Called by [khonofy-test-orchestrator](../khonofy-test-orchestrator/SKILL.md).
 
+**Note:** Provision once at suite start. During deploy-repair cycles within the same run, **reuse** the same `.cursor/test-run-credentials.json` — do not re-provision unless orchestrator instructs (e.g. corrupted test data).
+
 ## Goal
 
 Each test run uses **brand-new users** — never reuse Wandile/David/Ali or prior run accounts.
@@ -111,6 +113,7 @@ next_action: Staff tester logs in with staff_email and Demo123!
 3. Password is always **`Demo123!`** for all three test users.
 4. Confirm staff `admin_id` is set before staff timesheet submit tests.
 5. Do not delete bootstrap superuser.
+6. During deploy-repair cycles, credentials from the same run remain valid — testers resume with the same `runId` after senior dev push + 10 min wait.
 
 ## Failure handling
 

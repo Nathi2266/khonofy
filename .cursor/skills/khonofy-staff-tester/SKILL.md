@@ -1,10 +1,9 @@
 ---
 name: khonofy-staff-tester
 description: >-
-  Khonofy staff-role coverage tester. Verifies staff pages and workflows work
-  correctly and suggests Bug/Polish/Optimization improvements. Tests dashboard,
-  calendar, daily task log, tasks, timesheets, profile, and auth. Use when
-  orchestrator assigns full staff coverage or improvement review.
+  Khonofy staff-role coverage tester. Verifies staff pages and workflows, reports
+  Bug/Polish/Optimization findings, pauses on needs_fix, resumes after senior dev
+  deploys. Part of the continuous suite loop — never ends the suite alone.
 ---
 
 # Khonofy Staff Tester
@@ -27,6 +26,28 @@ Read from `.cursor/test-run-credentials.json` (written by Step 0 provision):
 | `staff.adminEmail` | Confirm admin assignment (staff → admin handoff) |
 
 Do **not** log in as Wandile or other legacy accounts unless provisioning failed and orchestrator explicitly falls back.
+
+## Suite continuity (deploy-repair cycle)
+
+You are one of **three role testers** in a suite that **does not stop** until senior dev implements, pushes, deployment finishes, and all testers confirm on production.
+
+| Phase | Your behavior |
+|-------|---------------|
+| **Running** | Test all in-scope pages; report pass/fail + findings |
+| **needs_fix** | Stop the **affected page/flow**; send `needs_fix` to orchestrator → senior dev; **do not exit or declare suite done** |
+| **awaiting_deploy** | **Wait** — senior dev pushed; deployment in progress (~10 minutes) |
+| **resume_testing** | Senior dev (or orchestrator) tells you to continue — rerun listed pages on **production** |
+| **Suite complete** | Only when orchestrator confirms cycle end conditions met |
+
+When you receive `resume_testing`:
+
+1. Use the **same** credentials from `.cursor/test-run-credentials.json` (same `runId`).
+2. Test against **production** URL — not localhost.
+3. Rerun the **exact pages and connected flows** listed in the message.
+4. Report pass/fail + any new findings to orchestrator.
+5. Continue remaining coverage if orchestrator instructs.
+
+**Never** treat your individual `done` status as the end of the full suite.
 
 ## Purpose
 
@@ -129,7 +150,7 @@ If the page **passes** but could be better, the agent **must still report it**.
 When `worth_now: yes` on a polish/optimization item, set:
 
 ```text
-next_action: Forward to Senior-Dev_khonofy via orchestrator; cycle continues after implementation.
+next_action: Forward to Senior-Dev_khonofy via orchestrator; suite continues after push + 10 min deploy + resume_testing.
 ```
 
 ## Page coverage map
@@ -245,7 +266,7 @@ test_case: <page>_<control>
 page: <path>
 summary: <control> failed on <page>
 details: Clicked "<label>". Visible result: <error/hang/nothing>. Expected: <behavior>.
-next_action: Fix control; orchestrator reruns this page and connected flow.
+next_action: Senior dev implements, pushes, waits 10 min for deploy, sends resume_testing; rerun this page and connected flow on production.
 ```
 
 ## Browser operating rules
@@ -270,4 +291,4 @@ Return per role and per page:
 
 ## Quality bar
 
-Success means every in-scope staff page was visited, visible controls were exercised or explicitly skipped with reason, cross-role handoff was confirmed in the UI — not assumed — and **improvement findings were captured even when tests pass**.
+Success means every in-scope staff page was visited, visible controls were exercised or explicitly skipped with reason, cross-role handoff was confirmed in the UI — not assumed — improvement findings were captured even when tests pass, and you **resumed testing after deploy** when instructed. The full suite ends only when the orchestrator confirms cycle completion.
