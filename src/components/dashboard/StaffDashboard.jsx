@@ -27,8 +27,25 @@ export default function StaffDashboard({ user }) {
 
   const { data: myTasks = [] } = useQuery({
     queryKey: ['myTasks', user.id],
-    queryFn: () => base44.entities.Task.filter({ assigned_to: user.id }),
+    queryFn: async () => {
+      const [assigned, created] = await Promise.all([
+        base44.entities.Task.filter({ assigned_to: user.id }),
+        base44.entities.Task.filter({ created_by_id: user.id }),
+      ]);
+      const merged = new Map();
+      [...assigned, ...created].forEach((task) => merged.set(task.id, task));
+      return [...merged.values()];
+    },
     enabled: !!user.id,
+  });
+
+  const { data: weekEntries = [] } = useQuery({
+    queryKey: ['weekEntries', user.id, currentWeek.start, currentWeek.end],
+    queryFn: () => base44.entities.TimeEntry.filter({ user_id: user.id }),
+    enabled: !!user.id,
+    select: (entries) => entries.filter(
+      (entry) => entry.date >= currentWeek.start && entry.date <= currentWeek.end
+    ),
   });
 
   const { data: todayEntries = [] } = useQuery({
@@ -44,6 +61,7 @@ export default function StaffDashboard({ user }) {
   });
 
   const hoursToday = todayEntries.reduce((sum, e) => sum + (e.hours || 0), 0);
+  const currentWeekHours = weekEntries.reduce((sum, entry) => sum + (entry.hours || 0), 0);
   const openTasks = myTasks.filter(t => t.status !== 'completed').length;
   const completedTasks = myTasks.filter(t => t.status === 'completed').length;
   const currentWeekSheet = findTimesheetForWeek(timesheets, currentWeek);
@@ -135,7 +153,13 @@ export default function StaffDashboard({ user }) {
                       </span>
                     ) : null}
                   </div>
-                  <p className="text-xs text-muted-foreground">{ts.total_hours || 0}h logged</p>
+                  <p className="text-xs text-muted-foreground">
+                    {(
+                      currentWeekSheet?.id === ts.id && currentWeekHours > 0
+                        ? currentWeekHours
+                        : ts.total_hours || 0
+                    ).toFixed(1).replace(/\.0$/, '')}h logged
+                  </p>
                 </div>
                 <StatusBadge status={ts.status} />
               </div>
