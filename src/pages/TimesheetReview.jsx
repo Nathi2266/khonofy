@@ -107,7 +107,7 @@ export default function TimesheetReview() {
 
   const resolveDepartmentName = (timesheet) => {
     const departmentId = timesheet.department_id || staffById[timesheet.user_id]?.department_id;
-    return departmentsById[departmentId]?.name || 'Unassigned';
+    return departmentsById[departmentId]?.name || 'No department';
   };
 
   const sortedTimesheets = useMemo(() => {

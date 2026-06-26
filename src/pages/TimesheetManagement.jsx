@@ -153,13 +153,19 @@ export default function TimesheetManagement() {
 
   const submitTimesheet = useMutation({
     mutationFn: async () => {
+      const allEntries = await base44.entities.TimeEntry.filter({ user_id: user.id });
+      const weekEntries = allEntries.filter(
+        (entry) => entry.date >= week.start && entry.date <= week.end
+      );
+      const submitTotalHours = weekEntries.reduce((sum, entry) => sum + (entry.hours || 0), 0);
+
       const payload = {
         user_id: user.id,
         user_name: user.full_name || user.email,
         department_id: user.department_id || '',
         week_start: week.start,
         week_end: week.end,
-        total_hours: totalHours,
+        total_hours: submitTotalHours,
         status: 'pending',
         submitted_at: new Date().toISOString(),
         admin_notes: '',
@@ -168,7 +174,7 @@ export default function TimesheetManagement() {
         reviewed_at: null,
       };
       const linkEntries = async (timesheetId) => {
-        for (const entry of timeEntries) {
+        for (const entry of weekEntries) {
           await base44.entities.TimeEntry.update(entry.id, { timesheet_id: timesheetId });
         }
       };
@@ -492,7 +498,9 @@ export default function TimesheetManagement() {
                   <p className="text-sm font-medium text-foreground">
                     {formatWeekRangeLabel(timesheet.week_start, timesheet.week_end)}
                   </p>
-                  <p className="text-xs text-muted-foreground">{timesheet.total_hours || 0}h logged</p>
+                  <p className="text-xs text-muted-foreground">
+                    {(currentSheet?.id === timesheet.id ? totalHours : timesheet.total_hours || 0).toFixed(1).replace(/\.0$/, '')}h logged
+                  </p>
                   {timesheet.withdrawn_at ? (
                     <p className="mt-0.5 text-xs text-slate-600">
                       Withdrawn on {new Date(timesheet.withdrawn_at).toLocaleString()}
