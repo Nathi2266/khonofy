@@ -58,13 +58,22 @@ export default function Login() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
-    if (!trimmedEmail || !passwordValue) {
+    const form = e.currentTarget;
+    const emailInput = form.elements.namedItem("email");
+    const passwordInput = form.elements.namedItem("password");
+    const finalEmail = String(
+      emailInput instanceof HTMLInputElement ? emailInput.value : email
+    ).trim();
+    const finalPassword = String(
+      passwordInput instanceof HTMLInputElement ? passwordInput.value : password
+    );
+    if (!finalEmail || !finalPassword) {
       setError("Please fill in all required fields.");
       return;
     }
     setLoading(true);
     try {
-      await base44.auth.loginViaEmailPassword(trimmedEmail, passwordValue);
+      await base44.auth.loginViaEmailPassword(finalEmail, finalPassword);
       await checkUserAuth();
       navigate("/", { replace: true });
     } catch (err) {
@@ -118,14 +127,17 @@ export default function Login() {
               <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" aria-hidden="true" />
               <Input
                 id="email"
+                name="email"
                 type="email"
                 autoComplete="email"
                 autoFocus
                 placeholder="you@khonology.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                onInput={(e) => setEmail(e.currentTarget.value)}
                 className="pl-10 h-12 rounded-full"
                 required
+                data-testid="login-email"
               />
             </div>
           </div>
@@ -134,13 +146,16 @@ export default function Login() {
             <div className="relative">
               <Input
                 id="password"
+                name="password"
                 type={showPassword ? "text" : "password"}
                 autoComplete="current-password"
                 placeholder="password123#"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                onInput={(e) => setPassword(e.currentTarget.value)}
                 className="h-12 rounded-full pl-4 pr-12"
                 required
+                data-testid="login-password"
               />
               <button
                 type="button"
@@ -156,7 +171,12 @@ export default function Login() {
               </button>
             </div>
           </div>
-          <Button type="submit" className="w-full h-12 rounded-full font-medium bg-primary hover:bg-primary/90 text-white" disabled={loading || !isFormComplete}>
+          <Button
+            type="submit"
+            className="w-full h-12 rounded-full font-medium bg-primary hover:bg-primary/90 text-white"
+            disabled={loading}
+            data-testid="login-submit"
+          >
             {loading ? "Logging in..." : "LOGIN"}
           </Button>
         </form>
