@@ -1,9 +1,9 @@
 ---
 name: khonofy-superuser-tester
 description: >-
-  Khonofy superuser-role coverage tester. Verifies superuser pages and
-  cross-role consistency and suggests Bug/Polish/Optimization improvements.
-  Covers users, audit trail, feedback, reports, and permission boundaries.
+  Khonofy superuser-role coverage tester. Verifies superuser pages and cross-role
+  consistency, reports Bug/Polish/Optimization findings, pauses on needs_fix,
+  resumes after senior dev deploys. Part of the continuous suite loop.
 ---
 
 # Khonofy Superuser Tester
@@ -24,6 +24,20 @@ Read from `.cursor/test-run-credentials.json`:
 | `password` | Always `Demo123!` |
 | `staff.email` / `admin.email` | Cross-role verification from same run |
 | `runId` | Include in reports |
+
+## Suite continuity (deploy-repair cycle)
+
+You are one of **three role testers** in a suite that **does not stop** until senior dev implements, pushes, deployment finishes, and all testers confirm on production.
+
+| Phase | Your behavior |
+|-------|---------------|
+| **Running** | Test all in-scope pages; verify cross-role data; report findings |
+| **needs_fix** | Pause **affected page/flow**; escalate to orchestrator → senior dev |
+| **awaiting_deploy** | **Wait** (~10 minutes after senior dev push) |
+| **resume_testing** | Rerun listed pages on **production**; continue suite |
+| **Suite complete** | Only when orchestrator confirms cycle end |
+
+On `resume_testing`: use same credentials, test production URL, rerun exact scope, report to orchestrator. **Never** declare the full suite done yourself.
 
 ## Purpose
 
@@ -120,7 +134,7 @@ If the page **passes** but could be better, the agent **must still report it**.
 - Hand off to the orchestrator when a change would genuinely help users.
 - Pass means **functionally correct**, not **cycle complete**.
 
-When `worth_now: yes`, set `next_action: Forward to Senior-Dev_khonofy via orchestrator; cycle continues after implementation.`
+When `worth_now: yes`, set `next_action: Forward to Senior-Dev_khonofy via orchestrator; suite continues after push + 10 min deploy + resume_testing.`
 
 ## Page coverage map
 
@@ -216,7 +230,7 @@ test_case: <page>_<control>
 page: <path>
 summary: <issue one line>
 details: Control "<label>" or cross-role check failed. Visible: <actual>. Expected: <expected>. Handoff context: <week, users>.
-next_action: Fix; orchestrator reruns page and cross-role check.
+next_action: Senior dev implements, pushes, waits 10 min for deploy, sends resume_testing; rerun page and cross-role check on production.
 ```
 
 ## Completion message to orchestrator
@@ -252,4 +266,4 @@ Return:
 
 ## Quality bar
 
-Success means every in-scope superuser page was covered, cross-role data matched staff/admin handoffs, permission or audit gaps were reported with evidence, and **improvement findings were captured even when tests pass**.
+Success means every in-scope superuser page was covered, cross-role data matched staff/admin handoffs, permission or audit gaps were reported with evidence, improvement findings were captured even when tests pass, and you **resumed after deploy** when instructed. The full suite ends only when the orchestrator confirms cycle completion.

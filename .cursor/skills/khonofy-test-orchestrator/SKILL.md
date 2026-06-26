@@ -1,9 +1,9 @@
 ---
 name: khonofy-test-orchestrator
 description: >-
-  Coordinates dual-purpose Khonofy browser testing with a continuous improvement
-  loop — verify correctness, collect improvements, senior-dev upgrades, rerun
-  until stable. Does not stop on pass alone.
+  Coordinates dual-purpose Khonofy browser testing with a continuous deploy-repair
+  loop — verify correctness, collect improvements, senior dev implements and
+  pushes, wait for deployment, rerun until stable. Suite never stops on pass alone.
 ---
 
 # Khonofy Test Orchestrator
@@ -84,49 +84,73 @@ The senior developer should prioritize suggestions using:
 2. **Apply high-impact improvements next** (implement now: high impact, low risk, clear benefit).
 3. **Defer** useful but not urgent ideas.
 4. **Reject** noisy, subjective, or low-value churn unless clarity improves materially.
-5. **After any upgrade**, rerun the affected tests and confirm the improvement.
+5. **After any upgrade**, senior dev pushes → wait 10 min for deploy → all three testers rerun and confirm on production.
 
 ## Continuous improvement loop
 
-**A passing test suite is not the end of the workflow; it is the start of improvement review.** The suite continues until bugs are fixed, worthwhile UX/code upgrades are applied, and reruns confirm the changes.
+**The test suite must not stop until Senior-Dev_khonofy has implemented code fixes or approved upgrades, pushed to the repo, deployment has finished, and the three role testers have rerun and confirmed the changes.**
 
-This is a **continuous improvement loop**, not a stop-on-pass test.
+A passing test suite is not the end — it is the start of improvement review. The suite runs continuously through the **deploy-repair cycle** below until cycle end conditions are met.
+
+This is a **continuous deploy-repair loop**, not a stop-on-pass test.
+
+### Deploy-repair cycle (mandatory)
+
+When bugs or high-value improvements require code changes, the orchestrator **pauses affected testing**, hands off to senior dev, and **does not finish the suite** until the full cycle completes:
+
+```
+Staff / Admin / Superuser testers
+        ↓  report pass/fail + bug/polish/optimization
+Orchestrator consolidates → sends needs_fix / improvement backlog
+        ↓
+Senior-Dev_khonofy — triage → write code → lint/typecheck
+        ↓
+Senior-Dev_khonofy — commit + push to repo
+        ↓
+Senior-Dev_khonofy — wait 10 minutes for Azure deployment to finish
+        ↓
+Senior-Dev_khonofy — tell all 3 role testers to resume (resume_testing)
+        ↓
+Staff / Admin / Superuser — rerun impacted pages/flows on deployed app
+        ↓
+New bugs or high-value suggestions? → loop again from consolidate
+        ↓
+No open bugs + no high-value backlog → final report
+```
+
+**Rules for this cycle:**
+
+1. **Never declare the suite complete** while open `needs_fix` items or unimplemented high-value improvements remain.
+2. **Never skip the 10-minute deploy wait** after senior dev pushes — testers must verify the **deployed** app, not local-only changes.
+3. **Senior dev must push** — local fixes alone do not unblock the suite.
+4. After deploy wait, senior dev (or orchestrator) sends **`resume_testing`** to Staff, Admin, and Superuser testers with explicit rerun scope.
+5. Testers **continue the suite** from the orchestrator's rerun instructions — they do not restart provisioning unless orchestrator says so.
 
 ### Situation → action
 
 | Situation | What happens |
 |-----------|----------------|
-| Tests **fail** | Senior dev fixes the issue → agents rerun affected pages/flows |
-| Tests **pass** but suggestions exist | Senior dev reviews suggestions → implements high-value upgrades → agents rerun |
-| Tests **pass** and **no suggestions** exist | Orchestrator may finish the cycle |
+| Tests **fail** (`needs_fix`) | Pause affected scope → senior dev fixes → push → wait 10 min → all 3 testers resume |
+| Tests **pass** but high-value suggestions exist | Senior dev implements → push → wait 10 min → testers rerun affected pages |
+| Tests **pass** and **no suggestions** worth implementing | Orchestrator may advance to next coverage or finish cycle |
+| Senior dev **pushed** but deploy not ready | Status `awaiting_deploy` — wait full 10 minutes before `resume_testing` |
+| Testers **resumed** after deploy | Rerun impacted pages + connected handoffs; report pass/fail + new findings |
 
 A passing run does **not** automatically end the cycle. Keep the loop alive while worthwhile `polish` or `optimization` items remain for the current cycle.
 
 ### Cycle end conditions
 
-End the cycle only when **both** are true:
+End the suite only when **both** are true:
 
-1. **No open bugs** — all `needs_fix` items resolved and rerun confirmed.
-2. **No high-value improvements left** — senior dev has implemented, deferred, or rejected every item; deferred/rejected items are documented; reruns confirm implemented changes.
+1. **No open bugs** — all `needs_fix` items fixed, pushed, deployed, and rerun-confirmed on production.
+2. **No high-value improvements left** — senior dev has implemented, deferred, or rejected every item; implemented items are deployed and rerun-confirmed; deferred/rejected items are documented.
 
 Low-value or deferred items do **not** block cycle completion unless the orchestrator explicitly starts another improvement pass.
 
-### Operating cycle
+### Operating cycle (summary)
 
 ```
-Staff / Admin / Superuser testers
-        ↓  bugs + polish + optimization (even on pass)
-Orchestrator consolidates reports
-        ↓
-Senior-Dev_khonofy — triage → implement high-value upgrades
-        ↓
-Verify (lint/typecheck) + notify orchestrator
-        ↓
-Rerun impacted pages/flows → testers confirm
-        ↓
-New observations? → loop again
-        ↓
-No bugs + no high-value backlog → final report
+Testers → Orchestrator → Senior Dev (code + push + 10 min wait) → Testers resume → loop
 ```
 
 ### Example
@@ -197,7 +221,8 @@ If any visible control fails, hangs, or produces an incorrect UI state:
 3. record the visible result
 4. mark `needs_fix` if code changes are needed
 5. hand off to [Senior-Dev_khonofy](../senior-dev-khonofy/SKILL.md)
-6. rerun the affected page and connected flow after the fix
+6. senior dev implements → push → wait 10 min → `resume_testing` to all three testers
+7. rerun the affected page and connected flow on **production** after deploy
 
 ## Test layers (run in order)
 
@@ -238,7 +263,7 @@ Each sub-agent must read its own skill before acting.
 Every agent must communicate using this structure:
 
 ```text
-status: <ready|running|blocked|handoff_ready|needs_fix|done>
+status: <ready|running|blocked|handoff_ready|needs_fix|awaiting_deploy|resume_testing|done>
 from: <agent name>
 to: <target agent name>
 test_case: <short identifier>
@@ -246,6 +271,13 @@ summary: <short human-readable summary>
 details: <exact steps, visible result, blockers>
 next_action: <what the receiving agent should do next>
 ```
+
+| Status | Meaning |
+|--------|---------|
+| `needs_fix` | Code defect — pause affected scope; route to senior dev |
+| `awaiting_deploy` | Senior dev pushed; waiting 10 minutes for deployment |
+| `resume_testing` | Deploy wait complete — role testers continue rerun scope |
+| `done` | Agent finished **current** assignment — not suite complete unless orchestrator says so |
 
 Optional coverage fields for page-level reports:
 
@@ -264,9 +296,12 @@ findings:
 ### Handoff rules
 
 - If one agent completes a workflow another must continue, send `handoff_ready` and wait.
-- If any agent finds a code defect, send `needs_fix` to Senior-Dev_khonofy and pause the affected page/flow.
+- If any agent finds a code defect, send `needs_fix` to Senior-Dev_khonofy and **pause the affected page/flow** — do **not** end the suite.
 - If an agent finds improvements on a **passing** page, include them in `findings` and forward to orchestrator — **never treat pass as cycle complete**.
-- After Senior-Dev_khonofy reports a fix or implemented improvement, rerun the affected page and connected flow, then **continue the loop** if new findings appear.
+- When senior dev pushes fixes, orchestrator sets `awaiting_deploy` and waits **10 minutes** for Azure deployment.
+- After deploy wait, senior dev (or orchestrator) sends `resume_testing` to **all three role testers** with explicit rerun scope.
+- After testers confirm deployed fixes, **continue the loop** if new findings appear.
+- **The suite does not stop** until cycle end conditions are met (see Continuous improvement loop).
 
 ## Orchestration workflow
 
@@ -280,28 +315,31 @@ findings:
 2. Open browser visibly if requested (`position: "active"`).
 3. **Run all role testers** — Layers 1–4 + improvement findings on every page.
 4. **Consolidate** — merge bug/polish/optimization; dedupe; prioritize.
-5. **If any failures** → `needs_fix` to Senior-Dev_khonofy → fix → rerun → return to step 3 for affected scope.
-6. **If passes with suggestions** → forward backlog to Senior-Dev_khonofy → **do not stop**.
-7. **Senior-Dev_khonofy** — triage; implement high-value upgrades; defer/reject others with reasons.
-8. **Rerun** impacted pages/flows; testers confirm upgrades and capture new observations.
-9. **Loop** — if new bugs or high-value suggestions appear, return to step 4.
-10. **Finish** only when cycle end conditions are met (see Continuous improvement loop).
-11. Produce **final consolidated coverage + improvement report** (including implemented, deferred, rejected, and rerun results).
+5. **If any failures or high-value improvements need code** → `needs_fix` / backlog to Senior-Dev_khonofy → **pause affected scope; do not stop suite**.
+6. **Senior-Dev_khonofy** — triage; implement; lint/typecheck; **commit + push to repo**.
+7. **Deploy wait** — set `awaiting_deploy`; wait **10 minutes** for Azure Static Web Apps + backend deployment to finish.
+8. **Senior-Dev_khonofy** — send `resume_testing` to Staff, Admin, and Superuser testers with rerun scope (pages, layers, handoffs).
+9. **Testers resume** on **production URL** — rerun impacted pages/flows; capture new findings.
+10. **Loop** — if new bugs or high-value suggestions appear, return to step 4.
+11. **Finish** only when cycle end conditions are met (see Continuous improvement loop).
+12. Produce **final consolidated coverage + improvement report** (including implemented, deferred, rejected, deploy cycles, and rerun results).
 
 ## Living quality loop (summary)
 
 ```
 Testers (all roles) → report pass/fail + bug/polish/optimization
         ↓
-Orchestrator → consolidate findings
+Orchestrator → consolidate findings → needs_fix / improvement backlog
         ↓
-Senior Dev → bugs first → wise upgrade selection → minimal code changes
+Senior Dev → bugs first → implement → commit + push
         ↓
-Verify + notify orchestrator
+Wait 10 minutes for deployment
         ↓
-Testers rerun impacted flows → confirm improvement
+Senior Dev → resume_testing → all 3 role testers
         ↓
-Final report (coverage + implemented + deferred + rejected)
+Testers rerun on deployed app → confirm improvement
+        ↓
+Loop until no bugs + no high-value backlog → final report
 ```
 
 ## Master app checklist
@@ -357,11 +395,17 @@ Cross-role flows
 - [ ] Superuser sees cross-role record
 - [ ] Audit trail records action if supported
 
-Repair loop
+Repair loop (deploy-repair cycle)
 - [ ] Tester finds defect (page + control + result)
-- [ ] Senior dev fixes
-- [ ] Orchestrator reruns affected page/flow
+- [ ] Orchestrator sends needs_fix — suite pauses affected scope (does NOT stop)
+- [ ] Senior dev implements fix or upgrade
+- [ ] Senior dev runs lint/typecheck
+- [ ] Senior dev commits and pushes to repo
+- [ ] Wait 10 minutes for Azure deployment
+- [ ] Senior dev sends resume_testing to Staff, Admin, Superuser
+- [ ] All 3 testers rerun impacted pages on production
 - [ ] Before/after recorded in final report
+- [ ] Loop repeats until cycle end conditions met
 
 Improvement review
 - [ ] Each tester reports bug / polish / optimization per page
@@ -385,6 +429,8 @@ Improvement review
 7. Use slow typing for React controlled inputs — `browser_fill` alone can leave login stuck.
 8. A **passing page** must still include improvement findings when warranted — empty improvement sections are OK only when nothing useful was observed.
 9. **Do not end the cycle on pass alone** — continue while senior dev has high-value improvements to implement or verify.
+10. **Do not end the suite** until senior dev has pushed, deployment has waited 10 minutes, and testers have rerun on the deployed app.
+11. During `awaiting_deploy`, orchestrator and testers **wait** — do not rerun against stale production.
 
 ## Test environment defaults
 
@@ -421,7 +467,8 @@ The orchestrator must produce:
 - **improvement backlog** consolidated by category (`bug`, `polish`, `optimization`)
 - code fixes and **upgrades applied** by Senior-Dev_khonofy (if any)
 - **triage decisions** — implement / defer / reject with reasons
-- **rerun results** after fixes and implemented improvements
+- **deploy cycles** — each push, 10-minute wait, and rerun round
+- **rerun results** after fixes and implemented improvements (on deployed production)
 - **remaining gaps** (pages or controls not tested and why)
 
 ## Quality bar

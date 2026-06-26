@@ -2,8 +2,8 @@
 name: khonofy-browser-testing
 description: >-
   Khonofy browser user testing for end-to-end UI validation and improvement
-  review. Use when an agent needs to log in, navigate like a real user, verify
-  timesheet flows, and report Bug/Polish/Optimization findings from the UI.
+  review. Part of the orchestrated suite — report failures, wait for senior dev
+  deploy, resume when told. Suite never stops on pass alone.
 ---
 
 # Khonofy Browser User Testing
@@ -40,9 +40,18 @@ Focus areas: faster time entry, clearer week labels, better totals display, subm
 
 Per flow, report what worked, what felt awkward, concrete ideas (with effort), and whether worth implementing now.
 
-**Escalation:** Pass does not end the cycle. Forward `worth_now: yes` findings to the orchestrator for senior dev triage.
+**Escalation:** Pass does not end the cycle. Forward `worth_now: yes` findings to the orchestrator for senior dev triage. On failure, send `needs_fix` — the suite **continues** after senior dev pushes, waits 10 minutes for deploy, and sends `resume_testing`.
 
-See [khonofy-staff-tester](../khonofy-staff-tester/SKILL.md) for full improvement review and escalation rules.
+See [khonofy-staff-tester](../khonofy-staff-tester/SKILL.md) for full improvement review and deploy-repair cycle rules.
+
+## Deploy-repair cycle (orchestrated runs)
+
+When running under [khonofy-test-orchestrator](../khonofy-test-orchestrator/SKILL.md):
+
+1. **Report failures** — do not abandon the suite; send `needs_fix` with exact page, control, and visible result.
+2. **Wait** when status is `awaiting_deploy` — senior dev pushed; ~10 minute deploy wait.
+3. **Resume** on `resume_testing` — rerun listed pages on **production** with same provisioned credentials.
+4. **Do not declare suite complete** — only the orchestrator ends the run.
 
 ## Scope
 
@@ -75,7 +84,7 @@ Use this skill when you need to:
 4. Do not assume success without visible confirmation.
 5. If something fails, report the exact step and the visible error.
 6. Prefer simple, repeatable test data.
-7. Stop immediately on the first unrecoverable failure and report it.
+7. On unrecoverable failure: **report `needs_fix` and pause the affected flow** — do not end the orchestrated suite. Wait for senior dev deploy + `resume_testing`.
 
 ## Standard workflow
 
@@ -115,11 +124,12 @@ Before submission, confirm:
 
 If any step fails:
 
-- stop the flow
 - identify the exact page and control involved
 - capture the visible error message
 - report whether the issue is reproducible
-- do not silently skip the failed step
+- send `needs_fix` to orchestrator — **do not silently skip or end the suite**
+- wait for `resume_testing` after senior dev push + 10 min deploy
+- rerun the failed step on production when resumed
 
 ## Output format
 
@@ -164,4 +174,4 @@ Use this prompt when delegating to a browser-testing agent:
 
 ## Quality bar
 
-A successful run means the agent verified the full user journey end to end, did not rely on hidden state or assumptions, and captured improvement ideas when the flow passes but UX could be better.
+A successful run means the agent verified the full user journey end to end, did not rely on hidden state or assumptions, captured improvement ideas when the flow passes but UX could be better, and **resumed after deploy** when the orchestrated suite requires it.
