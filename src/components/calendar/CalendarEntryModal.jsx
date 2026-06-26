@@ -87,13 +87,19 @@ export default function CalendarEntryModal({
   };
 
   const handleDateChange = (dateValue) => {
+    if (!dateValue) return;
     setForm((current) => {
       const nextStart = parseDateTimeInput(dateValue, toTimeInputValue(current.start_at));
+      if (!nextStart) return current;
       const nextEnd = parseDateTimeInput(dateValue, toTimeInputValue(current.end_at));
+      const resolvedEnd = nextEnd && nextEnd > nextStart
+        ? nextEnd
+        : new Date(nextStart.getTime() + 60 * 60 * 1000);
       return {
         ...current,
         start_at: nextStart,
-        end_at: nextEnd <= nextStart ? new Date(nextStart.getTime() + 60 * 60 * 1000) : nextEnd,
+        end_at: resolvedEnd,
+        recurring_end_date: normalizeRecurringEndDate(nextStart, current.recurring_end_date),
       };
     });
   };
@@ -101,7 +107,9 @@ export default function CalendarEntryModal({
   const handleTimeChange = (field, timeValue) => {
     setForm((current) => {
       const dateValue = toDateInputValue(current.start_at);
+      if (!dateValue) return current;
       const nextTime = parseDateTimeInput(dateValue, timeValue);
+      if (!nextTime) return current;
       if (field === 'start_at') {
         const durationMs = current.end_at.getTime() - current.start_at.getTime();
         const adjustedEnd = new Date(nextTime.getTime() + Math.max(durationMs, 15 * 60 * 1000));
@@ -140,7 +148,9 @@ export default function CalendarEntryModal({
     }));
   };
 
-  const durationHours = Math.max(differenceInMinutes(form.end_at, form.start_at), 15) / 60;
+  const durationHours = Number.isFinite(form.start_at?.getTime()) && Number.isFinite(form.end_at?.getTime())
+    ? Math.max(differenceInMinutes(form.end_at, form.start_at), 15) / 60
+    : 1;
   const isRecurring = Boolean(form.recurring_enabled);
   const recurringOccurrenceCount = isRecurring
     ? countRecurringOccurrences({
@@ -363,6 +373,7 @@ export default function CalendarEntryModal({
                           value={toDateInputValue(form.recurring_end_date || form.start_at)}
                           onChange={(event) => {
                             const nextEnd = parseDateTimeInput(event.target.value, '00:00');
+                            if (!nextEnd) return;
                             setForm((current) => ({
                               ...current,
                               recurring_end_date: normalizeRecurringEndDate(current.start_at, nextEnd),
