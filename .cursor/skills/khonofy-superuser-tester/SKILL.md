@@ -1,9 +1,9 @@
 ---
 name: khonofy-superuser-tester
 description: >-
-  Khonofy superuser-role coverage tester. Verifies superuser pages and
-  cross-role consistency and suggests Bug/Polish/Optimization improvements.
-  Covers users, audit trail, feedback, reports, and permission boundaries.
+  Agent 3 in the Khonofy test orchestration loop. Tests superuser and cross-role
+  flows continuously, reports pass/fail/blocked/needs_fix to orchestrator, reruns
+  when told. Loop runs until the user stops it.
 ---
 
 # Khonofy Superuser Tester
@@ -24,6 +24,20 @@ Read from `.cursor/test-run-credentials.json`:
 | `password` | Always `Demo123!` |
 | `staff.email` / `admin.email` | Cross-role verification from same run |
 | `runId` | Include in reports |
+
+## Test orchestration loop (your role)
+
+You are **Agent 3: Superuser Tester**. The orchestrator dispatches you; you **run superuser and cross-role suites** and **report results**.
+
+| Part | Your behavior |
+|------|---------------|
+| **Wait** | Do not test until orchestrator says deployment is live |
+| **Run** | Execute superuser flows; verify cross-role data from handoffs |
+| **Report** | Return `pass`, `fail`, `blocked`, or `needs_fix` to orchestrator |
+| **Rerun** | On `rerun`: broken flow first, then nearby cross-role checks if listed |
+| **Repeat** | Continue until user stops the loop |
+
+On failure: `needs_fix` → orchestrator → senior dev → wait → `rerun` from orchestrator. **Never** declare the loop complete yourself.
 
 ## Purpose
 
@@ -120,7 +134,7 @@ If the page **passes** but could be better, the agent **must still report it**.
 - Hand off to the orchestrator when a change would genuinely help users.
 - Pass means **functionally correct**, not **cycle complete**.
 
-When `worth_now: yes`, set `next_action: Forward to Senior-Dev_khonofy via orchestrator; cycle continues after implementation.`
+When `worth_now: yes`, set `next_action: Forward to orchestrator as informational note; only needs_fix triggers the Fix step.`
 
 ## Page coverage map
 
@@ -211,12 +225,12 @@ Use orchestrator context: staff email, admin email, week, action taken.
 ```text
 status: needs_fix
 from: Khonofy-Superuser-Tester
-to: Senior-Dev_khonofy
+to: Khonofy-Test-Orchestrator
 test_case: <page>_<control>
 page: <path>
 summary: <issue one line>
-details: Control "<label>" or cross-role check failed. Visible: <actual>. Expected: <expected>. Handoff context: <week, users>.
-next_action: Fix; orchestrator reruns page and cross-role check.
+details: Control "<label>" or cross-role check failed. Visible: <actual>. Expected: <expected>.
+next_action: Orchestrator routes to senior dev; wait for rerun after deploy.
 ```
 
 ## Completion message to orchestrator
@@ -252,4 +266,4 @@ Return:
 
 ## Quality bar
 
-Success means every in-scope superuser page was covered, cross-role data matched staff/admin handoffs, permission or audit gaps were reported with evidence, and **improvement findings were captured even when tests pass**.
+Success means superuser flows ran in the loop, cross-role checks were reported to the orchestrator, reruns happened when instructed, and the loop continued until the user stopped it.

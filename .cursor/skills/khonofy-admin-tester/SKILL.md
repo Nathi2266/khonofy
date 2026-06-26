@@ -1,9 +1,9 @@
 ---
 name: khonofy-admin-tester
 description: >-
-  Khonofy admin-role coverage tester. Verifies admin pages and handoffs work
-  correctly and suggests Bug/Polish/Optimization improvements. Covers timesheet
-  review, team, projects, tags, reports, estimates, tasks, and staff/admin flows.
+  Agent 2 in the Khonofy test orchestration loop. Tests admin flows continuously,
+  reports pass/fail/blocked/needs_fix to orchestrator, reruns broken flows when told.
+  Loop runs until the user stops it.
 ---
 
 # Khonofy Admin Tester
@@ -26,6 +26,20 @@ Read from `.cursor/test-run-credentials.json`:
 | `runId` | Include in handoffs |
 
 The new admin only sees timesheets for **assigned staff** — the provisioned staff user is linked via `admin_id`.
+
+## Test orchestration loop (your role)
+
+You are **Agent 2: Admin Tester**. The orchestrator dispatches you; you **run admin suites** and **report results**.
+
+| Part | Your behavior |
+|------|---------------|
+| **Wait** | Do not test until orchestrator says deployment is live |
+| **Run** | Execute admin flows; process staff handoffs |
+| **Report** | Return `pass`, `fail`, `blocked`, or `needs_fix` to orchestrator |
+| **Rerun** | On `rerun`: broken flow first, then nearby flows (e.g. review after submit fix) |
+| **Repeat** | Continue until user stops the loop |
+
+On failure: `needs_fix` → orchestrator → senior dev → wait → `rerun` from orchestrator. **Never** declare the loop complete yourself.
 
 ## Purpose
 
@@ -123,7 +137,7 @@ If the page **passes** but could be better, the agent **must still report it**.
 - Hand off to the orchestrator when a change would genuinely help users.
 - Pass means **functionally correct**, not **cycle complete**.
 
-When `worth_now: yes`, set `next_action: Forward to Senior-Dev_khonofy via orchestrator; cycle continues after implementation.`
+When `worth_now: yes`, set `next_action: Forward to orchestrator as informational note; only needs_fix triggers the Fix step.`
 
 ## Page coverage map
 
@@ -219,12 +233,12 @@ next_action: Staff verifies post-review status on /timesheets.
 ```text
 status: needs_fix
 from: Khonofy-Admin-Tester
-to: Senior-Dev_khonofy
+to: Khonofy-Test-Orchestrator
 test_case: <page>_<control>
 page: <path>
 summary: <control> failed on <page>
-details: Clicked "<label>". Result: <visible outcome>. Expected: <behavior>. Staff handoff context if relevant.
-next_action: Fix; orchestrator reruns page and staff→admin flow if needed.
+details: Clicked "<label>". Result: <visible outcome>. Expected: <behavior>.
+next_action: Orchestrator routes to senior dev; wait for rerun after deploy.
 ```
 
 ## Browser operating rules
@@ -249,4 +263,4 @@ Return:
 
 ## Quality bar
 
-Success means every in-scope admin page was covered, Timesheet Review handoff was processed with visible confirmation, broken controls were reported with page + label + result, and **improvement findings were captured even when tests pass**.
+Success means admin flows ran in the loop, handoffs were processed, failures went to the orchestrator, reruns happened when instructed, and the loop continued until the user stopped it.

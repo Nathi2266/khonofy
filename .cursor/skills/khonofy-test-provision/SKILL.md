@@ -1,90 +1,53 @@
 ---
 name: khonofy-test-provision
 description: >-
-  Provisions fresh staff, admin, and superuser test accounts before each Khonofy
-  test suite run. Creates three new users (password Demo123!), assigns the admin
-  to the staff user, and writes credentials for the orchestrator and role testers.
+  Step 0 for the Khonofy test orchestration loop. Provisions fresh staff, admin,
+  and superuser before the first RUN cycle. Reuse same credentials across loop
+  iterations until the user stops the session.
 ---
 
 # Khonofy Test Provision
 
-**Mandatory Step 0** for every orchestrated test run. Called by [khonofy-test-orchestrator](../khonofy-test-orchestrator/SKILL.md).
+**Step 0 — once per suite session.** Called by [khonofy-test-orchestrator](../khonofy-test-orchestrator/SKILL.md) before the first **Wait → Run** cycle.
+
+## When to provision
+
+| When | Action |
+|------|--------|
+| **Session start** | Always provision fresh users before first test cycle |
+| **Loop repeat** | Reuse same `.cursor/test-run-credentials.json` — do not re-provision |
+| **After fix/deploy** | Same credentials — orchestrator sends `rerun` only |
+| **New session** | User starts a new loop → provision again |
 
 ## Goal
 
-Each test run uses **brand-new users** — never reuse Wandile/David/Ali or prior run accounts.
+Brand-new users each session — never reuse Wandile/David/Ali or prior session accounts.
 
-| Role | Created fresh | Password |
-|------|---------------|----------|
-| Staff | Yes | `Demo123!` |
-| Admin | Yes | `Demo123!` |
-| Superuser | Yes | `Demo123!` |
+| Role | Password |
+|------|----------|
+| Staff | `Demo123!` |
+| Admin | `Demo123!` |
+| Superuser | `Demo123!` |
 
-**Staff must have `admin_id` set** to the new admin user so timesheet submit and admin review handoffs work.
+Staff **must** have `admin_id` → new admin (timesheet handoff works).
 
-## Email pattern (per run)
-
-Each run gets a unique `runId`. Emails:
+## Emails (per session)
 
 - `test.staff.{runId}@khonology.com`
 - `test.admin.{runId}@khonology.com`
 - `test.superuser.{runId}@khonology.com`
 
-Password for all three: **`Demo123!`**
-
-## Bootstrap superuser
-
-Creating users requires an existing superuser (factory account). Defaults:
-
-| Variable | Default |
-|----------|---------|
-| `KHONOFY_BOOTSTRAP_SUPERUSER_EMAIL` | `ali.khan@khonology.com` |
-| `KHONOFY_BOOTSTRAP_SUPERUSER_PASSWORD` | `Demo123!` |
-
-The bootstrap account is **only for provisioning** — role testers log in as the **new** trio.
-
-## Provision script (preferred)
-
-From repo root:
-
-```bash
-# Local
-KHONOFY_API_URL=http://localhost:3001 node scripts/provision-test-users.mjs
-
-# Production backend
-KHONOFY_API_URL=https://khonofy-backend-api-d2fscwb7f3aeevac.southafricanorth-01.azurewebsites.net node scripts/provision-test-users.mjs
-```
-
-Or via npm:
+## Script
 
 ```bash
 npm run test:provision
+# or with production API:
+KHONOFY_API_URL=https://khonofy-backend-api-d2fscwb7f3aeevac.southafricanorth-01.azurewebsites.net npm run test:provision
 ```
 
-### Output
+Writes `.cursor/test-run-credentials.json` (gitignored).
 
-- Prints JSON to stdout
-- Writes `.cursor/test-run-credentials.json` (gitignored)
-
-Example:
-
-```json
-{
-  "runId": "2026-06-25T12-00-00-abc123",
-  "password": "Demo123!",
-  "staff": { "email": "test.staff....@khonology.com", "adminEmail": "test.admin....@khonology.com" },
-  "admin": { "email": "test.admin....@khonology.com" },
-  "superuser": { "email": "test.superuser....@khonology.com" }
-}
-```
-
-## Browser fallback (if script cannot run)
-
-1. Log in as bootstrap superuser.
-2. **User Management** → create **Admin** (`Demo123!`).
-3. Create **Staff** with same password; set **Assigned admin** to the new admin.
-4. Create **Superuser** with same password.
-5. Record all three emails + `Demo123!` in the handoff block below.
+Bootstrap superuser (create only): `ali.khan@khonology.com` / `Demo123!`
 
 ## Handoff to orchestrator
 
@@ -93,30 +56,20 @@ status: handoff_ready
 from: Khonofy-Test-Provision
 to: Khonofy-Test-Orchestrator
 test_case: fresh_test_users
-summary: Fresh staff, admin, superuser provisioned for run {runId}
+summary: Fresh staff, admin, superuser for session {runId}
 details:
   runId: {runId}
   password: Demo123!
-  staff_email: test.staff.{runId}@khonology.com
-  admin_email: test.admin.{runId}@khonology.com
-  superuser_email: test.superuser.{runId}@khonology.com
+  staff_email: ...
+  admin_email: ...
+  superuser_email: ...
   staff_admin_assigned: yes
-next_action: Staff tester logs in with staff_email and Demo123!
+next_action: Senior dev confirms deploy live (WAIT) → orchestrator dispatches RUN.
 ```
 
 ## Rules
 
-1. **Never skip provisioning** at the start of a full suite run.
-2. **Never reuse** credentials from a previous run's `.cursor/test-run-credentials.json` for a new run — always provision again.
-3. Password is always **`Demo123!`** for all three test users.
-4. Confirm staff `admin_id` is set before staff timesheet submit tests.
-5. Do not delete bootstrap superuser.
-
-## Failure handling
-
-| Error | Action |
-|-------|--------|
-| Bootstrap login fails | Verify bootstrap email/password; check API URL |
-| Email already registered | Re-run script (new runId) or use fresh runId |
-| Forbidden on create | Bootstrap account must be superuser |
-| Staff submit blocked (no admin) | Re-provision; verify `admin_id` on staff user |
+1. Provision once per session — not every loop cycle.
+2. Password always **`Demo123!`** for all three test users.
+3. Confirm staff `admin_id` before timesheet handoff tests.
+4. Do not delete bootstrap superuser.

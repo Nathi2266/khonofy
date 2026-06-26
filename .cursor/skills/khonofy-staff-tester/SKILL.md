@@ -1,10 +1,9 @@
 ---
 name: khonofy-staff-tester
 description: >-
-  Khonofy staff-role coverage tester. Verifies staff pages and workflows work
-  correctly and suggests Bug/Polish/Optimization improvements. Tests dashboard,
-  calendar, daily task log, tasks, timesheets, profile, and auth. Use when
-  orchestrator assigns full staff coverage or improvement review.
+  Agent 1 in the Khonofy test orchestration loop. Tests staff flows continuously,
+  reports pass/fail/blocked/needs_fix to orchestrator, reruns broken flows when told.
+  Loop runs until the user stops it.
 ---
 
 # Khonofy Staff Tester
@@ -27,6 +26,29 @@ Read from `.cursor/test-run-credentials.json` (written by Step 0 provision):
 | `staff.adminEmail` | Confirm admin assignment (staff → admin handoff) |
 
 Do **not** log in as Wandile or other legacy accounts unless provisioning failed and orchestrator explicitly falls back.
+
+## Test orchestration loop (your role)
+
+You are **Agent 1: Staff Tester**. The [orchestrator](../khonofy-test-orchestrator/SKILL.md) keeps the loop moving. You **run staff suites** and **report results**.
+
+| Part | Your behavior |
+|------|---------------|
+| **Wait** | Do not test until orchestrator says deployment is live |
+| **Run** | Execute staff flows in the browser |
+| **Report** | Return `pass`, `fail`, `blocked`, or `needs_fix` to orchestrator |
+| **Fix** | *(Senior dev — not you)* |
+| **Rerun** | When orchestrator sends `rerun`, retry **broken flow first**, then nearby flows if listed |
+| **Repeat** | Continue next cycle until user stops the loop |
+
+### When you find a failure
+
+1. Stop the **affected flow** only.
+2. Send `needs_fix` to **orchestrator** (not senior dev directly).
+3. **Wait** while senior dev fixes and deployment finishes.
+4. On `rerun` from orchestrator: retry broken flow on **production** first.
+5. Report result → orchestrator continues the loop.
+
+**Never** declare the suite or loop complete — only the user stops it.
 
 ## Purpose
 
@@ -129,7 +151,7 @@ If the page **passes** but could be better, the agent **must still report it**.
 When `worth_now: yes` on a polish/optimization item, set:
 
 ```text
-next_action: Forward to Senior-Dev_khonofy via orchestrator; cycle continues after implementation.
+next_action: Forward to orchestrator as informational note; only `needs_fix` triggers the Fix step.
 ```
 
 ## Page coverage map
@@ -240,12 +262,12 @@ If a button does nothing, breaks, or UI gets stuck:
 ```text
 status: needs_fix
 from: Khonofy-Staff-Tester
-to: Senior-Dev_khonofy
+to: Khonofy-Test-Orchestrator
 test_case: <page>_<control>
 page: <path>
 summary: <control> failed on <page>
 details: Clicked "<label>". Visible result: <error/hang/nothing>. Expected: <behavior>.
-next_action: Fix control; orchestrator reruns this page and connected flow.
+next_action: Orchestrator routes to senior dev; wait for rerun after deploy.
 ```
 
 ## Browser operating rules
@@ -270,4 +292,4 @@ Return per role and per page:
 
 ## Quality bar
 
-Success means every in-scope staff page was visited, visible controls were exercised or explicitly skipped with reason, cross-role handoff was confirmed in the UI — not assumed — and **improvement findings were captured even when tests pass**.
+Success means staff flows were tested in the loop, failures were reported to the orchestrator, reruns happened on production when instructed, and the loop continued until the user stopped it — not when you finished one pass.
