@@ -218,6 +218,22 @@ async function assertAdminCanAssignStaff(admin, staffId, { previousAssignee = nu
   throw new Error('You can only assign tasks to staff on your team');
 }
 
+async function assertStaffCanAssignTeammate(staffUser, staffId) {
+  if (!staffId) return;
+
+  const assignee = await prisma.user.findUnique({ where: { id: staffId } });
+  if (!assignee || assignee.role !== 'staff') {
+    throw new Error('Assigned user must be a staff member');
+  }
+
+  if (staffId === staffUser.id) return;
+
+  const creator = await prisma.user.findUnique({ where: { id: staffUser.id } });
+  if (creator?.adminId && assignee.adminId === creator.adminId) return;
+
+  throw new Error('You can only assign tasks to yourself or teammates on your team');
+}
+
 async function resolveTaskAssignee(payload) {
   if (!payload.assignedTo) {
     if (payload.assignedToName) payload.assignedToName = null;
@@ -937,13 +953,17 @@ async function handleCreate(resource, user, body) {
 
   if (cfg.model === 'task') {
     required(payload.title, 'title');
-    if (!isSuperuser(user) && !isAdmin(user)) {
+    if (user.role === 'staff') {
+      if (payload.assignedTo) {
+        await assertStaffCanAssignTeammate(user, payload.assignedTo);
+        await resolveTaskAssignee(payload);
+      }
+    } else if (!isSuperuser(user) && !isAdmin(user)) {
       throw new Error('Forbidden');
-    }
-    if (isAdmin(user) && payload.assignedTo) {
+    } else if (isAdmin(user) && payload.assignedTo) {
       await assertAdminCanAssignStaff(user, payload.assignedTo);
-    }
-    if (payload.assignedTo) {
+      await resolveTaskAssignee(payload);
+    } else if (payload.assignedTo) {
       await resolveTaskAssignee(payload);
     }
     payload.createdById = user.id;
@@ -1106,7 +1126,9 @@ async function handleUpdate(resource, user, id, body) {
 
   let payload = coerceDates(cfg.model, normalizeInput(body));
   if (cfg.model === 'task') {
-    if (isAdmin(user) && payload.assignedTo) {
+    if (user.role === 'staff' && payload.assignedTo) {
+      await assertStaffCanAssignTeammate(user, payload.assignedTo);
+    } else if (isAdmin(user) && payload.assignedTo) {
       await assertAdminCanAssignStaff(user, payload.assignedTo, { previousAssignee: existing.assignedTo });
     }
     if (payload.assignedTo !== undefined) {
