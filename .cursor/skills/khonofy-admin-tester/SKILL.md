@@ -1,9 +1,9 @@
 ---
 name: khonofy-admin-tester
 description: >-
-  Khonofy admin-role coverage tester. Verifies admin pages and handoffs, reports
-  Bug/Polish/Optimization findings, pauses on needs_fix, resumes after senior dev
-  deploys. Part of the continuous suite loop — never ends the suite alone.
+  Agent 2 in the Khonofy test orchestration loop. Tests admin flows continuously,
+  reports pass/fail/blocked/needs_fix to orchestrator, reruns broken flows when told.
+  Loop runs until the user stops it.
 ---
 
 # Khonofy Admin Tester
@@ -27,19 +27,19 @@ Read from `.cursor/test-run-credentials.json`:
 
 The new admin only sees timesheets for **assigned staff** — the provisioned staff user is linked via `admin_id`.
 
-## Suite continuity (deploy-repair cycle)
+## Test orchestration loop (your role)
 
-You are one of **three role testers** in a suite that **does not stop** until senior dev implements, pushes, deployment finishes, and all testers confirm on production.
+You are **Agent 2: Admin Tester**. The orchestrator dispatches you; you **run admin suites** and **report results**.
 
-| Phase | Your behavior |
-|-------|---------------|
-| **Running** | Test all in-scope pages; process staff handoffs; report findings |
-| **needs_fix** | Pause **affected page/flow**; escalate to orchestrator → senior dev |
-| **awaiting_deploy** | **Wait** (~10 minutes after senior dev push) |
-| **resume_testing** | Rerun listed pages on **production**; continue suite |
-| **Suite complete** | Only when orchestrator confirms cycle end |
+| Part | Your behavior |
+|------|---------------|
+| **Wait** | Do not test until orchestrator says deployment is live |
+| **Run** | Execute admin flows; process staff handoffs |
+| **Report** | Return `pass`, `fail`, `blocked`, or `needs_fix` to orchestrator |
+| **Rerun** | On `rerun`: broken flow first, then nearby flows (e.g. review after submit fix) |
+| **Repeat** | Continue until user stops the loop |
 
-On `resume_testing`: use same `.cursor/test-run-credentials.json`, test production URL, rerun exact scope from senior dev message, report to orchestrator. **Never** declare the full suite done yourself.
+On failure: `needs_fix` → orchestrator → senior dev → wait → `rerun` from orchestrator. **Never** declare the loop complete yourself.
 
 ## Purpose
 
@@ -137,7 +137,7 @@ If the page **passes** but could be better, the agent **must still report it**.
 - Hand off to the orchestrator when a change would genuinely help users.
 - Pass means **functionally correct**, not **cycle complete**.
 
-When `worth_now: yes`, set `next_action: Forward to Senior-Dev_khonofy via orchestrator; suite continues after push + 10 min deploy + resume_testing.`
+When `worth_now: yes`, set `next_action: Forward to orchestrator as informational note; only needs_fix triggers the Fix step.`
 
 ## Page coverage map
 
@@ -233,12 +233,12 @@ next_action: Staff verifies post-review status on /timesheets.
 ```text
 status: needs_fix
 from: Khonofy-Admin-Tester
-to: Senior-Dev_khonofy
+to: Khonofy-Test-Orchestrator
 test_case: <page>_<control>
 page: <path>
 summary: <control> failed on <page>
-details: Clicked "<label>". Result: <visible outcome>. Expected: <behavior>. Staff handoff context if relevant.
-next_action: Senior dev implements, pushes, waits 10 min for deploy, sends resume_testing; rerun page and staff→admin flow on production.
+details: Clicked "<label>". Result: <visible outcome>. Expected: <behavior>.
+next_action: Orchestrator routes to senior dev; wait for rerun after deploy.
 ```
 
 ## Browser operating rules
@@ -263,4 +263,4 @@ Return:
 
 ## Quality bar
 
-Success means every in-scope admin page was covered, Timesheet Review handoff was processed with visible confirmation, broken controls were reported with page + label + result, improvement findings were captured even when tests pass, and you **resumed after deploy** when instructed. The full suite ends only when the orchestrator confirms cycle completion.
+Success means admin flows ran in the loop, handoffs were processed, failures went to the orchestrator, reruns happened when instructed, and the loop continued until the user stopped it.

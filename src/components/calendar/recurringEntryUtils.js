@@ -63,6 +63,9 @@ export function countRecurringOccurrences(options) {
 }
 
 export function formatRecurringSummary({ startAt, recurringEndDate, recurringDays, occurrenceCount }) {
+  if (!Number.isFinite(startAt?.getTime()) || !Number.isFinite(recurringEndDate?.getTime())) {
+    return 'Select at least one day and make sure the end date is on or after the start date.';
+  }
   const dayLabels = WEEKDAY_OPTIONS
     .filter((option) => recurringDays.includes(option.value))
     .map((option) => option.label)

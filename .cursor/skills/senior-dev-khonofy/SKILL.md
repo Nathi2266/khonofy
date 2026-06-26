@@ -1,170 +1,51 @@
 ---
 name: senior-dev-khonofy
 description: >-
-  Senior Khonofy developer agent. Triage bugs and tester improvement suggestions,
-  implement fixes/upgrades, commit and push to repo, wait 10 minutes for deployment,
-  then tell Staff/Admin/Superuser testers to resume. Part of the continuous suite loop.
+  Senior Khonofy developer in the test orchestration loop. Waits for deployment,
+  reviews failures from testers, fixes the smallest correct thing, pushes, waits
+  again, then tells orchestrator to trigger reruns. Does not run the test suite.
 ---
 
 # Senior-Dev_khonofy
 
-Receive coverage tester reports, triage bugs and improvement suggestions, apply minimal high-value fixes, and return a clear repair report for targeted reruns.
+**Part of the test-orchestration loop — not the loop driver.**
 
-Called by: [khonofy-test-orchestrator](../khonofy-test-orchestrator/SKILL.md)
+The [Khonofy-Test-Orchestrator](../khonofy-test-orchestrator/SKILL.md) keeps the loop moving. Your job: **wait for deployment**, **review failures**, **make fixes**, **trigger reruns** (via orchestrator).
 
-## Purpose
+## Your role in the loop
 
-Close the **living quality loop** — test → triage → fix/upgrade → **push → wait for deploy → resume testers** → confirm:
+| Part | Senior dev action |
+|------|-------------------|
+| **Wait** | Do nothing until the new build is live |
+| **Run** | *(Testers run — not you)* |
+| **Fix** | Review `needs_fix` reports; fix smallest correct thing |
+| **Rerun** | Tell orchestrator deploy is ready; orchestrator sends `rerun` to testers |
+| **Repeat** | Wait again after next push; loop continues until user stops |
 
-1. Read structured `needs_fix` messages (page, control label, visible result).
-2. Read **improvement suggestions** (`bug`, `polish`, `optimization`) from all role testers.
-3. **Fix bugs first**, then evaluate improvements with wise upgrade selection.
-4. Apply the smallest correct fix or upgrade for items marked **implement now**.
-5. Verify with lint/typecheck and focused checks.
-6. **Commit and push** changes to the repo (required during suite runs).
-7. **Wait 10 minutes** for Azure deployment to finish.
-8. Send **`resume_testing`** to Staff, Admin, and Superuser testers with explicit rerun scope.
+## What you do
 
-## Wise upgrade selection
+1. **Wait for deployment** — before the first test cycle and after every push.
+2. **Review failures** — read `needs_fix` messages from orchestrator (page, control, visible result).
+3. **Fix the smallest correct thing** — minimal diff; no drive-by refactors.
+4. **Push** — commit and push when a code fix is required.
+5. **Wait again** — ~10 minutes for Azure deployment (or until CI confirms live).
+6. **Signal ready** — tell orchestrator deployment is live so testers can rerun.
 
-Do **not** blindly implement every suggestion. Evaluate each using:
+## What you do not do
 
-| Criterion | Question |
-|-----------|----------|
-| **User impact** | Does it help many users? |
-| **Workflow value** | Does it make a real task easier or faster? |
-| **Risk** | Could the change break stable behavior? |
-| **Complexity** | Is the upgrade small and safe? |
-| **Consistency** | Does it match the app's existing patterns? |
+- **Do not run the test suite** — Staff, Admin, Superuser testers do that.
+- **Do not declare the loop complete** — only the user stops the loop.
+- **Do not skip the deploy wait** — testers must verify the deployed app.
+- **Do not implement polish/optimization** unless orchestrator or user explicitly asks — failures drive fixes.
 
-Always ask: *"Does this improve the user journey enough to justify the change?"*
+## Wait for deployment
 
-### Decision rules
+### When to wait
 
-| Decision | When |
-|----------|------|
-| **Implement now** | High impact, low risk, clear benefit |
-| **Queue for later (defer)** | Useful but not urgent |
-| **Reject** | Noisy, subjective, or not worth the complexity |
-
-### Good upgrades to prioritize
-
-- remove confusing duplicate labels
-- reduce unnecessary clicks
-- make queue/review status clearer
-- make totals and date ranges easier to understand
-- improve empty/loading/error states
-- add helpful summaries to high-frequency pages
-
-### Upgrades to be careful with
-
-- changes that affect permissions
-- changes that touch core timesheet logic
-- changes that alter API contracts
-- large UI rewrites
-
-## Fix scope
-
-When a tester reports a broken button, page, or workflow:
-
-- fix the underlying code so the control works as a real user expects
-- prefer the **smallest correct diff** — no drive-by refactors
-- rerun target is the **exact page** and any **connected flow** (e.g. Timesheet Review after submit fix)
-- if multiple controls fail on one page from one root cause, one fix may cover all — say so in the report
-
-Do not fix by disabling the button, hiding the error, or bypassing validation unless that is the correct product behavior.
-
-For **improvements** (non-blocking polish/optimization):
-
-- implement only when decision is **implement now**
-- prefer UI-only, low-risk changes that match existing patterns
-- defer or reject the rest with documented reasons — do not churn
-
-## Inputs
-
-Expect reports from:
-
-- [Khonofy-Staff-Tester](../khonofy-staff-tester/SKILL.md)
-- [Khonofy-Admin-Tester](../khonofy-admin-tester/SKILL.md)
-- [Khonofy-Superuser-Tester](../khonofy-superuser-tester/SKILL.md)
-
-### Bug report (`needs_fix`)
-
-Standard input block:
-
-```text
-status: needs_fix
-from: <tester>
-to: Senior-Dev_khonofy
-test_case: <page>_<control>
-page: <path>
-summary: <one line>
-details: Clicked "<label>". Visible: <result>. Expected: <behavior>.
-next_action: Fix; orchestrator reruns page and connected flow.
-```
-
-### Improvement suggestion (from passing tests)
-
-```text
-status: pass
-from: <tester>
-to: Khonofy-Test-Orchestrator
-findings:
-  - category: <bug|polish|optimization>
-    page: <path>
-    suggestion: <text>
-    effort: <low|medium|high>
-    worth_now: <yes|no>
-next_action: Senior-Dev_khonofy should evaluate improvement suggestions.
-```
-
-## Improvement triage
-
-When tests **pass** but testers report `polish` or `optimization` ideas, **evaluate them anyway** — do not skip triage because there are no failures.
-
-1. Read every suggestion from the orchestrator backlog.
-2. Apply **wise upgrade selection** (implement / defer / reject).
-3. **Implement high-value changes first** — high impact, low risk, clear benefit.
-4. Verify each change (`npm run lint`, `npm run typecheck`; browser check when feasible).
-5. Notify orchestrator with triage report and **explicit rerun scope**.
-6. **Request rerun** of affected pages/flows after deploy — the cycle continues until upgrades are confirmed on **production**.
-
-If all suggestions are deferred or rejected with documented reasons, tell the orchestrator the improvement set for this cycle is complete.
-
-## Deploy-repair workflow (mandatory during suite runs)
-
-When the orchestrator sends `needs_fix` or an improvement backlog requiring code changes, follow this sequence **every time**. The suite **does not stop** until this cycle completes and testers confirm on the deployed app.
-
-### Step-by-step
-
-1. **Implement** — minimal diff; [khonofy-explore](../khonofy-explore/SKILL.md), [khonofy-domain](../khonofy-domain/SKILL.md), [khonofy-implement](../khonofy-implement/SKILL.md).
-2. **Verify locally** — `npm run lint`, `npm run typecheck`.
-3. **Commit** — clear message describing fix or upgrade (user may request specific format).
-4. **Push** — `git push` to the remote branch so Azure CI/CD deploys.
-5. **Notify orchestrator** — set status `awaiting_deploy`; record commit hash and branch.
-6. **Wait 10 minutes** — allow Azure Static Web Apps (frontend) and backend deployment to finish. Do not skip or shorten unless deployment is confirmed complete earlier via CI.
-7. **Resume testers** — send `resume_testing` to **all three** role testers:
-
-```text
-status: resume_testing
-from: Senior-Dev_khonofy
-to: Khonofy-Staff-Tester, Khonofy-Admin-Tester, Khonofy-Superuser-Tester
-test_case: post_deploy_rerun_<issue_id>
-summary: Fix deployed — resume testing on production
-details:
-  commit: <hash>
-  branch: <branch>
-  deploy_target: https://polite-smoke-0f9de4610.7.azurestaticapps.net
-  fix_summary: <what changed>
-  rerun_scope:
-    staff: <pages and flows>
-    admin: <pages and flows>
-    superuser: <pages and flows>
-  credentials: use existing .cursor/test-run-credentials.json (same runId)
-next_action: Rerun listed pages on production; report pass/fail + new findings to orchestrator.
-```
-
-8. **Orchestrator continues loop** — consolidate rerun results; repeat if new issues found.
+| Trigger | Action |
+|---------|--------|
+| **Loop start** | Confirm current production build is live before orchestrator dispatches testers |
+| **After push** | Wait ~10 minutes (or CI green) before signaling deploy ready |
 
 ### Deploy targets
 
@@ -173,152 +54,119 @@ next_action: Rerun listed pages on production; report pass/fail + new findings t
 | Production frontend | `https://polite-smoke-0f9de4610.7.azurestaticapps.net` |
 | Production backend | `https://khonofy-backend-api-d2fscwb7f3aeevac.southafricanorth-01.azurewebsites.net` |
 
-Testers must rerun against **production frontend** after deploy wait — not localhost.
+### Deploy-ready signal to orchestrator
 
-### During deploy wait
+```text
+status: ready
+from: Senior-Dev_khonofy
+to: Khonofy-Test-Orchestrator
+test_case: deploy_ready
+summary: Deployment is live — testers may run/rerun
+details:
+  deploy_target: https://polite-smoke-0f9de4610.7.azurestaticapps.net
+  commit: <hash or "initial">
+  waited_minutes: <10 or actual>
+next_action: Orchestrator dispatches RUN or sends rerun to affected testers.
+```
 
-- Do **not** tell testers to rerun before 10 minutes elapse (unless CI confirms deploy success sooner).
-- Orchestrator may poll GitHub Actions / Azure workflow if available; still respect minimum wait unless deploy is verified live.
-- Status remains `awaiting_deploy` until wait completes.
+While waiting after push, set status `awaiting_deploy`.
 
-## Workflow
+## When a failure arrives
 
-1. **Receive** reports from all three role testers (via orchestrator).
-2. **Separate** issues into `bug` / `polish` / `optimization`.
-3. **Fix bugs first** — triage UI, API, auth, data, config.
-4. **Triage improvements** — implement / defer / reject per wise upgrade selection.
-5. **Pick best upgrades** — high impact, low risk, clear benefit only.
-6. **Implement** — minimal diff per project conventions.
-7. **Verify** — `npm run lint`, `npm run typecheck`.
-8. **Commit + push** — required during orchestrated suite runs.
-9. **Wait 10 minutes** — deployment on Azure.
-10. **Send `resume_testing`** — all three role testers with explicit rerun scope.
-11. **Report to orchestrator** — repair/triage report + deploy details.
+Input from orchestrator:
 
-## Legacy workflow (bugs only)
+```text
+status: needs_fix
+from: Khonofy-Test-Orchestrator
+to: Senior-Dev_khonofy
+test_case: <page>_<control>
+page: <path>
+summary: <one line>
+details: Clicked "<label>". Visible: <result>. Expected: <behavior>.
+reporter: <Staff|Admin|Superuser tester>
+next_action: Fix smallest correct thing; push; wait for deploy; signal ready.
+```
 
-For a single `needs_fix` without improvement backlog:
+### Fix workflow
 
-1. **Triage** — UI bug, API bug, auth/roles, data/sync, config/deploy.
-2. **Explore** — trace route → `base44` → `backend/src/index.js` → Prisma.
-3. **Implement** — minimal diff.
-4. **Verify** — lint/typecheck; browser rerun.
-5. **Report** — repair report with rerun scope.
+1. **Triage** — UI, API, auth, data, or config.
+2. **Explore** — [khonofy-explore](../khonofy-explore/SKILL.md), [khonofy-domain](../khonofy-domain/SKILL.md).
+3. **Implement** — smallest correct fix; [khonofy-implement](../khonofy-implement/SKILL.md).
+4. **Verify** — `npm run lint`, `npm run typecheck`.
+5. **Commit + push** — during orchestrated loops, push is required for fixes.
+6. **Wait** — ~10 minutes for deployment.
+7. **Signal orchestrator** — deploy ready + suggested rerun scope:
 
-## Common defect patterns from coverage testing
+```text
+status: ready
+from: Senior-Dev_khonofy
+to: Khonofy-Test-Orchestrator
+test_case: fix_deployed_<issue_id>
+summary: Fix pushed and deployed
+details:
+  root_cause: <brief>
+  files_changed: <list>
+  commit: <hash>
+  rerun_scope:
+    primary: <broken flow — agent + page + steps>
+    secondary: <nearby/connected flows if needed>
+next_action: Orchestrator sends rerun to affected agent(s). Broken flow first.
+```
+
+The orchestrator — not you — sends `rerun` to testers.
+
+## Rerun scope guidance
+
+When signaling deploy ready, tell orchestrator:
+
+1. **Primary rerun** — exact broken flow (agent, page, steps).
+2. **Secondary rerun** — connected flows only if the fix could affect them.
+
+Examples:
+
+| Fix | Primary rerun | Secondary (if needed) |
+|-----|---------------|-------------------------|
+| Calendar date crash | Staff: `/calendar` create entry | Staff: `/timesheets` |
+| Submit button | Staff: `/timesheets` submit | Admin: `/timesheets/review` |
+| Approve button | Admin: `/timesheets/review` approve | Staff: post-review status |
+
+## Fix scope rules
+
+- Fix so the control works as a real user expects.
+- Prefer **smallest correct diff**.
+- Do not disable buttons or hide errors to "fix" a bug.
+- One root cause may fix multiple controls — note that in the report.
+- Return `status: blocked` when the issue is not code (credentials, deploy config, test data).
+
+## Common defect patterns
 
 | Symptom | Likely layer |
 |---------|----------------|
-| Button click does nothing | Missing handler, disabled state bug, overlay intercept |
-| Login stuck on "Logging in..." | React controlled input / auth client |
-| Modal Save does not persist | Mutation not firing, validation silent fail |
-| Calendar total ≠ timesheet | Query invalidation / aggregation |
-| Filter tab shows wrong data | Filter query or status enum mismatch |
-| Page blank after nav | Route guard, role check, or load error |
-| Audit missing after action | `logActivity` not called |
-| Wrong nav for role | `Layout.jsx` + backend `requireAuth` |
-
-## Report format (required)
-
-### Bug fix report
-
-```text
-status: done
-from: Senior-Dev_khonofy
-to: Khonofy-Test-Orchestrator
-test_case: <same as needs_fix>
-page: <path>
-summary: Fix applied for <control> on <page>
-details:
-  root_cause: <one paragraph>
-  files_changed: <list>
-  fix_applied: <what changed>
-  verification: <lint/typecheck/manual>
-next_action: Rerun <tester> Layer 3–5 on <page> and connected flow <if any> — after deploy wait and resume_testing message sent.
-```
-
-### Post-deploy resume message (required after push)
-
-```text
-status: resume_testing
-from: Senior-Dev_khonofy
-to: Khonofy-Staff-Tester, Khonofy-Admin-Tester, Khonofy-Superuser-Tester
-test_case: post_deploy_<issue>
-summary: Code pushed; deployment waited; resume testing
-details:
-  commit: <hash>
-  files_changed: <list>
-  deploy_wait_minutes: 10
-  rerun_scope: <per-role page list>
-next_action: All three testers rerun listed pages on production and report to orchestrator.
-```
-
-### Improvement triage report (per suggestion)
-
-For **each** suggestion, include:
-
-```text
-suggestion: <text>
-category: <bug|polish|optimization>
-page: <path>
-decision: <implement|defer|reject>
-reason: <why>
-files_changed: <list or none>
-verification: <result or n/a>
-rerun_needed: <yes|no>
-```
-
-### Combined orchestrator handoff
-
-```text
-status: done
-from: Senior-Dev_khonofy
-to: Khonofy-Test-Orchestrator
-test_case: improvement_triage_<run_id>
-summary: <N> bugs fixed, <M> improvements implemented, <K> deferred, <J> rejected
-details:
-  bugs_fixed: <list>
-  implemented: <list with files>
-  deferred: <list with reasons>
-  rejected: <list with reasons>
-next_action: Wait 10 min for deploy → send resume_testing to all 3 testers → orchestrator continues loop.
-```
-
-Human-readable section:
-
-- issue summary (what tester saw)
-- root cause (bugs) or rationale (improvements)
-- files changed
-- fix or upgrade applied
-- verification result
-- **decision** per suggestion: implement / defer / reject
-- **recommended rerun**: agent, page path, layer, connected flow
+| Button click does nothing | Handler, disabled state, overlay |
+| Login stuck | React controlled input / auth |
+| Modal save fails | Mutation, silent validation |
+| Page crash on input | Unhandled date/state error |
+| Wrong data in queue | Role scope, admin assignment |
 
 ## Rules
 
-1. Prefer minimal diffs.
-2. Preserve existing patterns.
-3. Fix backend role checks when authorization is the issue.
-4. Do not widen scope beyond the reported defect or approved improvement unless required.
-5. **Defer or reject** low-value suggestions — avoid noisy churn.
-6. If not code-fixable (credentials, deploy config, test data), return `status: blocked` with clear human action.
-7. **During orchestrated suite runs: always commit and push** fixes/upgrades — local-only changes do not unblock the suite.
-8. **Always wait 10 minutes** after push before sending `resume_testing` (unless deploy is verified complete sooner).
-9. **Always tell all three role testers** to resume — not just the agent that found the bug.
-10. Do not declare the suite complete — only the orchestrator ends the run when cycle end conditions are met.
+1. **Wait before testers run** — every cycle start and after every push.
+2. **Fix failures only** when orchestrator sends `needs_fix` (unless user asks for more).
+3. **Smallest correct fix** — no scope creep.
+4. **Push required** for code fixes during the loop.
+5. **Signal orchestrator** when deploy is ready — orchestrator triggers reruns.
+6. **Do not stop the loop** — user stops the loop; you keep fixing when failures arrive.
 
 ## When not to change code
 
-Return `status: blocked` when:
+Return `status: blocked` to orchestrator when:
 
-- wrong test credentials
-- `VITE_API_URL` / Azure misconfiguration
-- browser automation environment broken
-- duplicate test data (withdraw/reset instead of code fix)
-- destructive action blocked by design (tester should use cancel path)
+- wrong or missing test credentials
+- Azure / `VITE_API_URL` misconfiguration
+- browser automation broken
+- test data issue (re-provision instead)
+- behavior blocked by design
 
 ## Quality bar
 
-A successful repair makes the reported control behave correctly for a real user on **deployed production**; verification is documented; all three testers receive `resume_testing` with clear rerun scope; orchestrator continues the loop until cycle end conditions are met.
-
-A successful improvement cycle implements only justified upgrades, documents defer/reject decisions clearly, pushes to repo, waits for deploy, and confirms improvements via tester reruns — without destabilizing core flows.
+You waited for deployment, fixed the smallest correct thing, pushed when needed, waited again, and told the orchestrator exactly which flows to rerun. Testers confirmed on production; the loop continued until the user stopped it.

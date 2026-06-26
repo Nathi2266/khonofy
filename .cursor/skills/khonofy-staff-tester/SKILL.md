@@ -1,9 +1,9 @@
 ---
 name: khonofy-staff-tester
 description: >-
-  Khonofy staff-role coverage tester. Verifies staff pages and workflows, reports
-  Bug/Polish/Optimization findings, pauses on needs_fix, resumes after senior dev
-  deploys. Part of the continuous suite loop — never ends the suite alone.
+  Agent 1 in the Khonofy test orchestration loop. Tests staff flows continuously,
+  reports pass/fail/blocked/needs_fix to orchestrator, reruns broken flows when told.
+  Loop runs until the user stops it.
 ---
 
 # Khonofy Staff Tester
@@ -27,27 +27,28 @@ Read from `.cursor/test-run-credentials.json` (written by Step 0 provision):
 
 Do **not** log in as Wandile or other legacy accounts unless provisioning failed and orchestrator explicitly falls back.
 
-## Suite continuity (deploy-repair cycle)
+## Test orchestration loop (your role)
 
-You are one of **three role testers** in a suite that **does not stop** until senior dev implements, pushes, deployment finishes, and all testers confirm on production.
+You are **Agent 1: Staff Tester**. The [orchestrator](../khonofy-test-orchestrator/SKILL.md) keeps the loop moving. You **run staff suites** and **report results**.
 
-| Phase | Your behavior |
-|-------|---------------|
-| **Running** | Test all in-scope pages; report pass/fail + findings |
-| **needs_fix** | Stop the **affected page/flow**; send `needs_fix` to orchestrator → senior dev; **do not exit or declare suite done** |
-| **awaiting_deploy** | **Wait** — senior dev pushed; deployment in progress (~10 minutes) |
-| **resume_testing** | Senior dev (or orchestrator) tells you to continue — rerun listed pages on **production** |
-| **Suite complete** | Only when orchestrator confirms cycle end conditions met |
+| Part | Your behavior |
+|------|---------------|
+| **Wait** | Do not test until orchestrator says deployment is live |
+| **Run** | Execute staff flows in the browser |
+| **Report** | Return `pass`, `fail`, `blocked`, or `needs_fix` to orchestrator |
+| **Fix** | *(Senior dev — not you)* |
+| **Rerun** | When orchestrator sends `rerun`, retry **broken flow first**, then nearby flows if listed |
+| **Repeat** | Continue next cycle until user stops the loop |
 
-When you receive `resume_testing`:
+### When you find a failure
 
-1. Use the **same** credentials from `.cursor/test-run-credentials.json` (same `runId`).
-2. Test against **production** URL — not localhost.
-3. Rerun the **exact pages and connected flows** listed in the message.
-4. Report pass/fail + any new findings to orchestrator.
-5. Continue remaining coverage if orchestrator instructs.
+1. Stop the **affected flow** only.
+2. Send `needs_fix` to **orchestrator** (not senior dev directly).
+3. **Wait** while senior dev fixes and deployment finishes.
+4. On `rerun` from orchestrator: retry broken flow on **production** first.
+5. Report result → orchestrator continues the loop.
 
-**Never** treat your individual `done` status as the end of the full suite.
+**Never** declare the suite or loop complete — only the user stops it.
 
 ## Purpose
 
@@ -150,7 +151,7 @@ If the page **passes** but could be better, the agent **must still report it**.
 When `worth_now: yes` on a polish/optimization item, set:
 
 ```text
-next_action: Forward to Senior-Dev_khonofy via orchestrator; suite continues after push + 10 min deploy + resume_testing.
+next_action: Forward to orchestrator as informational note; only `needs_fix` triggers the Fix step.
 ```
 
 ## Page coverage map
@@ -261,12 +262,12 @@ If a button does nothing, breaks, or UI gets stuck:
 ```text
 status: needs_fix
 from: Khonofy-Staff-Tester
-to: Senior-Dev_khonofy
+to: Khonofy-Test-Orchestrator
 test_case: <page>_<control>
 page: <path>
 summary: <control> failed on <page>
 details: Clicked "<label>". Visible result: <error/hang/nothing>. Expected: <behavior>.
-next_action: Senior dev implements, pushes, waits 10 min for deploy, sends resume_testing; rerun this page and connected flow on production.
+next_action: Orchestrator routes to senior dev; wait for rerun after deploy.
 ```
 
 ## Browser operating rules
@@ -291,4 +292,4 @@ Return per role and per page:
 
 ## Quality bar
 
-Success means every in-scope staff page was visited, visible controls were exercised or explicitly skipped with reason, cross-role handoff was confirmed in the UI — not assumed — improvement findings were captured even when tests pass, and you **resumed testing after deploy** when instructed. The full suite ends only when the orchestrator confirms cycle completion.
+Success means staff flows were tested in the loop, failures were reported to the orchestrator, reruns happened on production when instructed, and the loop continued until the user stopped it — not when you finished one pass.

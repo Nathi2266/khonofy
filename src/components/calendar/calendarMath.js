@@ -86,16 +86,28 @@ export function buildDateTime(dateString, minutes) {
 }
 
 export function toDateInputValue(date) {
+  if (!(date instanceof Date) || !Number.isFinite(date.getTime())) {
+    return '';
+  }
   return format(date, 'yyyy-MM-dd');
 }
 
 export function toTimeInputValue(date) {
+  if (!(date instanceof Date) || !Number.isFinite(date.getTime())) {
+    return '00:00';
+  }
   return format(date, 'HH:mm');
 }
 
 export function parseDateTimeInput(dateString, timeString) {
+  if (!dateString || !/^\d{4}-\d{2}-\d{2}$/.test(String(dateString))) {
+    return null;
+  }
   const [hours, minutes] = String(timeString || '00:00').split(':').map(Number);
   const date = parseISO(`${dateString}T00:00:00`);
+  if (!Number.isFinite(date.getTime())) {
+    return null;
+  }
   date.setHours(hours || 0, minutes || 0, 0, 0);
   return date;
 }
