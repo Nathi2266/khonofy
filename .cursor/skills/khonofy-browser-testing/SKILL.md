@@ -12,6 +12,8 @@ Use this skill to delegate real-user browser testing for Khonofy.
 
 For coordinated **staff + admin + superuser** runs with handoffs and repair loops, start with [khonofy-test-orchestrator](../khonofy-test-orchestrator/SKILL.md) instead.
 
+**Step 0:** [khonofy-test-provision](../khonofy-test-provision/SKILL.md) must run first — each suite run creates fresh users; password is always **`Demo123!`**. Read `.cursor/test-run-credentials.json` for staff email before login.
+
 ## Purpose
 
 Test the application through the UI exactly like a staff user would:
@@ -38,7 +40,9 @@ Focus areas: faster time entry, clearer week labels, better totals display, subm
 
 Per flow, report what worked, what felt awkward, concrete ideas (with effort), and whether worth implementing now.
 
-See [khonofy-staff-tester](../khonofy-staff-tester/SKILL.md) for full improvement review rules.
+**Escalation:** Pass does not end the cycle. Forward `worth_now: yes` findings to the orchestrator for senior dev triage.
+
+See [khonofy-staff-tester](../khonofy-staff-tester/SKILL.md) for full improvement review and escalation rules.
 
 ## Scope
 
@@ -101,7 +105,8 @@ Before submission, confirm:
 
 ## Data handling
 
-- Use the credentials and test data provided in the task.
+- Read credentials from `.cursor/test-run-credentials.json` after Step 0 provision (staff email + `Demo123!`).
+- Do not reuse legacy fixed accounts (Wandile/David/Ali) for routine runs.
 - Create realistic work entries.
 - Match the exact hour target requested by the task.
 - If the target is 40 hours, verify the total reaches 40 before submitting.
