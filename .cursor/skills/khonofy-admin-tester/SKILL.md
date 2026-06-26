@@ -12,6 +12,21 @@ Act like a real **admin** user and perform **coverage-driven** testing of all ad
 
 Parent orchestrator: [khonofy-test-orchestrator](../khonofy-test-orchestrator/SKILL.md)
 
+Provisioning: [khonofy-test-provision](../khonofy-test-provision/SKILL.md) — use **fresh** admin credentials from each run.
+
+## Test credentials
+
+Read from `.cursor/test-run-credentials.json`:
+
+| Field | Use |
+|-------|-----|
+| `admin.email` | Admin login |
+| `password` | Always `Demo123!` |
+| `staff.email` | Locate staff submission in review queue |
+| `runId` | Include in handoffs |
+
+The new admin only sees timesheets for **assigned staff** — the provisioned staff user is linked via `admin_id`.
+
 ## Purpose
 
 Validate the full admin experience and staff/admin handoffs:
@@ -98,6 +113,17 @@ findings:
     worth_now: defer
 next_action: Senior-Dev_khonofy should evaluate improvement suggestions.
 ```
+
+## Improvement escalation
+
+If the page **passes** but could be better, the agent **must still report it**.
+
+- Do **not** ignore product improvements just because there are no bugs.
+- Classify every finding as `bug`, `polish`, or `optimization`.
+- Hand off to the orchestrator when a change would genuinely help users.
+- Pass means **functionally correct**, not **cycle complete**.
+
+When `worth_now: yes`, set `next_action: Forward to Senior-Dev_khonofy via orchestrator; cycle continues after implementation.`
 
 ## Page coverage map
 

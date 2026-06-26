@@ -13,6 +13,21 @@ Act like a real **staff** user and perform **coverage-driven** testing of all st
 
 Parent orchestrator: [khonofy-test-orchestrator](../khonofy-test-orchestrator/SKILL.md)
 
+Provisioning: [khonofy-test-provision](../khonofy-test-provision/SKILL.md) — use **fresh** staff credentials from each run; never reuse fixed demo accounts.
+
+## Test credentials
+
+Read from `.cursor/test-run-credentials.json` (written by Step 0 provision):
+
+| Field | Use |
+|-------|-----|
+| `staff.email` | Staff login |
+| `password` | Always `Demo123!` |
+| `runId` | Include in handoffs for traceability |
+| `staff.adminEmail` | Confirm admin assignment (staff → admin handoff) |
+
+Do **not** log in as Wandile or other legacy accounts unless provisioning failed and orchestrator explicitly falls back.
+
 ## Purpose
 
 Validate the full staff experience through the browser:
@@ -102,6 +117,22 @@ findings:
 next_action: Senior-Dev_khonofy should evaluate improvement suggestions.
 ```
 
+## Improvement escalation
+
+If the page **passes** but could be better, the agent **must still report it**.
+
+- Do **not** ignore product improvements just because there are no bugs.
+- Classify every finding as `bug`, `polish`, or `optimization`.
+- Hand off to the orchestrator (and ultimately Senior-Dev_khonofy) when a change would genuinely help users.
+- A pass status means **functionally correct**, not **no follow-up needed**.
+
+When `worth_now: yes` on a polish/optimization item, set:
+
+```text
+next_action: Forward to Senior-Dev_khonofy via orchestrator; cycle continues after implementation.
+```
+
+## Page coverage map
 
 | Page | Path | Component (reference) |
 |------|------|------------------------|

@@ -29,3 +29,6 @@ dist-ssr
 
 .env
 .vite
+
+# Ephemeral credentials from test suite provisioning (never commit)
+.cursor/test-run-credentials.json
