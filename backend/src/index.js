@@ -1309,21 +1309,25 @@ async function handleDelete(resource, user, id) {
   return serializeRecord(cfg.serialize, record);
 }
 
+const localDevOrigin = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;
+
 app.use(
   cors({
-    origin:
-      env.nodeEnv === 'development'
-        ? (origin, callback) => {
-            if (
-              !origin ||
-              /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)
-            ) {
-              callback(null, true);
-              return;
-            }
-            callback(null, env.frontendUrl);
-          }
-        : env.frontendUrl,
+    origin: (origin, callback) => {
+      if (!origin) {
+        callback(null, true);
+        return;
+      }
+      if (env.nodeEnv === 'development' && localDevOrigin.test(origin)) {
+        callback(null, true);
+        return;
+      }
+      if (env.corsOrigins.includes(origin)) {
+        callback(null, true);
+        return;
+      }
+      callback(null, false);
+    },
     credentials: true,
   })
 );
@@ -1739,4 +1743,5 @@ app.listen(env.port, '0.0.0.0', async () => {
 
   console.log(`Backend running at http://localhost:${env.port}`);
   console.log(`Frontend should run at ${env.frontendUrl}`);
+  console.log(`CORS origins: ${env.corsOrigins.join(', ')}`);
 });
