@@ -1,10 +1,37 @@
 import 'dotenv/config';
 
+export const PRODUCTION_FRONTEND_URL =
+  'https://polite-smoke-0f9de4610.7.azurestaticapps.net';
+
+const nodeEnv = process.env.NODE_ENV || 'development';
+
+function buildCorsOrigins() {
+  const origins = new Set();
+
+  const frontendUrl =
+    process.env.FRONTEND_URL
+    || (nodeEnv === 'production' ? PRODUCTION_FRONTEND_URL : 'http://localhost:5173');
+  origins.add(frontendUrl);
+  origins.add(PRODUCTION_FRONTEND_URL);
+
+  if (process.env.CORS_ORIGINS) {
+    for (const origin of process.env.CORS_ORIGINS.split(',')) {
+      const trimmed = origin.trim();
+      if (trimmed) origins.add(trimmed);
+    }
+  }
+
+  return [...origins];
+}
+
 export const env = {
   databaseUrl: process.env.DATABASE_URL || '',
   port: Number(process.env.PORT || 3001),
-  nodeEnv: process.env.NODE_ENV || 'development',
-  frontendUrl: process.env.FRONTEND_URL || 'http://localhost:5173',
+  nodeEnv,
+  frontendUrl:
+    process.env.FRONTEND_URL
+    || (nodeEnv === 'production' ? PRODUCTION_FRONTEND_URL : 'http://localhost:5173'),
+  corsOrigins: buildCorsOrigins(),
   jwtSecret: process.env.JWT_SECRET || 'replace-me-in-development',
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || '7d',
   smtpHost: process.env.SMTP_HOST || '',
