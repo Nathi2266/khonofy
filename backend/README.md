@@ -87,3 +87,19 @@ npm run db:seed
 | Staff     | Nathii | `nathii@khonofy.local`| `Demo123!` |
 
 Re-run `npm run db:seed` anytime to reset these passwords.
+
+## Azure production (App Service)
+
+The API runs at `khonofy-backend-api` on Linux App Service. Required settings:
+
+| Setting | Value |
+|---------|--------|
+| `FRONTEND_URL` | `https://polite-smoke-0f9de4610.7.azurestaticapps.net` |
+| `NODE_ENV` | `production` |
+| **Startup command** | `npm start` (or `bash startup.sh`) |
+| **Always On** | `true` |
+| **App Service plan** | Basic (B1) or higher — Free (F1) stops when daily quota is exceeded |
+
+Do **not** run `npm install` or `prisma db push` on every container start; that exceeds Azure's 230s startup timeout and returns 503 / browser CORS errors.
+
+Database migrations: run `npx prisma migrate deploy` manually or in CI when schema changes — not on app boot.

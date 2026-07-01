@@ -45,6 +45,11 @@ jobs:
       - name: Attach app version to backend package
         run: cp public/app-version.json backend/app-version.json
 
+      - name: Prepare source-only deploy package
+        run: |
+          chmod +x backend/startup.sh
+          rm -rf backend/node_modules
+
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v4
         with:
@@ -71,6 +76,22 @@ jobs:
           slot-name: 'Production'
           package: .
           publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_B7E4F49AD4D84AE383D97EFA095E3875 }}
+
+      - name: Wait for Azure backend health
+        run: |
+          url="https://khonofy-backend-api-d2fscwb7f3aeevac.southafricanorth-01.azurewebsites.net/health"
+          for attempt in $(seq 1 18); do
+            status="$(curl -s -o /tmp/health.json -w "%{http_code}" --max-time 20 "$url" || true)"
+            if [ "$status" = "200" ]; then
+              cat /tmp/health.json
+              echo "Backend healthy after ${attempt} attempt(s)"
+              exit 0
+            fi
+            echo "Attempt ${attempt}/18: HTTP ${status:-000}, retrying in 20s..."
+            sleep 20
+          done
+          echo "Backend did not become healthy in time"
+          exit 1
 
   open-pr-to-main:
     needs: deploy
