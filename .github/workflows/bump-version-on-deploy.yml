@@ -80,6 +80,7 @@ jobs:
       - name: Trigger backend deploy workflow
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
         run: |
           gh workflow run deploy_khonofy-backend-api.yml \
             --ref deploy \
@@ -97,6 +98,7 @@ jobs:
       - name: Trigger frontend deploy workflow
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
         run: |
           gh workflow run azure-static-web-apps-polite-smoke-0f9de4610.yml \
             --ref deploy \
