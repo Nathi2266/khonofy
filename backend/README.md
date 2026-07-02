@@ -117,7 +117,7 @@ Azure unpacks `node_modules.tar.gz` on boot; the generated Prisma client must ex
 
 1. Open `https://khonofy-backend-api-d2fscwb7f3aeevac.southafricanorth-01.azurewebsites.net/health` — it must return `{"ok":true}`.
 2. In Azure Portal → **khonofy-backend-api** → **Configuration** → **General settings**:
-   - **Startup Command**: `npm start`
+   - **Startup Command**: `node server.js`
    - **Stack**: Node 20 LTS (`WEBSITE_NODE_DEFAULT_VERSION=~20`)
 3. Confirm `DATABASE_URL`, `JWT_SECRET`, `FRONTEND_URL`, and `NODE_ENV=production` are set under **Environment variables**.
 4. Redeploy the backend workflow after code changes.
