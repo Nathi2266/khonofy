@@ -34,6 +34,8 @@ jobs:
       contents: read
       pull-requests: write
     steps:
+      - uses: actions/checkout@v4
+
       - name: Resolve source branch
         id: branch
         run: |
