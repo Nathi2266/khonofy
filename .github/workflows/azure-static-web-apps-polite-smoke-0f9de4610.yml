@@ -4,6 +4,10 @@ name: Azure Static Web Apps CI/CD
 on:
   workflow_dispatch:
     inputs:
+      deploy_sha:
+        description: Commit on deploy to build and release
+        required: false
+        type: string
       caller_run_id:
         description: Auto PR workflow run ID with frontend-dist-deploy artifact
         required: false
@@ -51,6 +55,8 @@ jobs:
       app_version: ${{ steps.version.outputs.app_version }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.deploy_sha || github.ref }}
       - name: Generate build version
         id: version
         run: |
@@ -76,6 +82,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ inputs.deploy_sha || github.ref }}
           submodules: true
           lfs: false
 
@@ -166,7 +173,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SELF_WORKFLOW: frontend
-          DEPLOY_SHA: ${{ github.sha }}
+          DEPLOY_SHA: ${{ inputs.deploy_sha || github.sha }}
         run: |
           chmod +x scripts/open-deploy-pr-to-main.sh
           scripts/open-deploy-pr-to-main.sh

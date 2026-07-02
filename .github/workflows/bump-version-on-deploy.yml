@@ -1,7 +1,7 @@
 # After a feature PR is merged into deploy:
 # 1. Detect whether the merge changed frontend and/or backend files
 # 2. Bump the app version and push
-# 3. Explicitly trigger deploy workflows (bot pushes do not re-fire push workflows)
+# 3. After bump completes, trigger deploy workflows (bot pushes do not re-fire push workflows)
 name: Bump version on deploy
 
 on:
@@ -10,44 +10,46 @@ on:
       - deploy
 
 jobs:
-  bump-version:
+  detect-changes:
     if: |
       ${{ !contains(github.event.head_commit.message, 'chore: bump app version') }}
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      actions: write
+    outputs:
+      backend: ${{ steps.detect.outputs.backend }}
+      frontend: ${{ steps.detect.outputs.frontend }}
     steps:
       - uses: actions/checkout@v4
         with:
           ref: deploy
           fetch-depth: 0
 
-      - name: Detect frontend and backend changes in merge
-        uses: dorny/paths-filter@v3
-        id: changes
+      - name: Detect frontend and backend deploy needs
+        id: detect
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: |
+          chmod +x scripts/detect-deploy-changes.sh
+          scripts/detect-deploy-changes.sh \
+            "${{ github.event.before }}" \
+            "${{ github.sha }}" \
+            "${{ github.event.head_commit.message }}"
+
+  bump-version:
+    needs: detect-changes
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      deploy_sha: ${{ steps.bump.outputs.deploy_sha }}
+    steps:
+      - uses: actions/checkout@v4
         with:
-          base: ${{ github.event.before }}
-          ref: ${{ github.sha }}
-          filters: |
-            backend:
-              - 'backend/**'
-              - '.github/workflows/deploy_khonofy-backend-api.yml'
-            frontend:
-              - 'src/**'
-              - 'public/**'
-              - 'index.html'
-              - 'vite.config.js'
-              - 'tailwind.config.js'
-              - 'postcss.config.js'
-              - 'components.json'
-              - 'jsconfig.json'
-              - 'package.json'
-              - 'package-lock.json'
-              - 'scripts/**'
-              - '.github/workflows/azure-static-web-apps-polite-smoke-0f9de4610.yml'
+          ref: deploy
+          fetch-depth: 0
 
       - name: Bump semantic version on deploy
+        id: bump
         env:
           GITHUB_RUN_NUMBER: ${{ github.run_number }}
           GITHUB_SHA: ${{ github.sha }}
@@ -59,27 +61,53 @@ jobs:
           git add package.json package-lock.json public/app-version.json backend/package.json
           if git diff --staged --quiet; then
             echo "Version files already up to date."
-            exit 0
+          else
+            git commit -m "chore: bump app version to 1.0.${GITHUB_RUN_NUMBER}"
+            git push origin deploy
           fi
-          git commit -m "chore: bump app version to 1.0.${GITHUB_RUN_NUMBER}"
-          git push origin deploy
+          git fetch origin deploy
+          git checkout deploy
+          echo "deploy_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
+  trigger-backend-deploy:
+    needs: [detect-changes, bump-version]
+    if: needs.detect-changes.outputs.backend == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      contents: read
+    steps:
       - name: Trigger backend deploy workflow
-        if: steps.changes.outputs.backend == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh workflow run deploy_khonofy-backend-api.yml --ref deploy
-          echo "Triggered backend deploy on deploy branch."
+          gh workflow run deploy_khonofy-backend-api.yml \
+            --ref deploy \
+            -f deploy_sha="${{ needs.bump-version.outputs.deploy_sha }}"
+          echo "Triggered backend deploy for ${{ needs.bump-version.outputs.deploy_sha }}."
 
+  trigger-frontend-deploy:
+    needs: [detect-changes, bump-version]
+    if: needs.detect-changes.outputs.frontend == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      contents: read
+    steps:
       - name: Trigger frontend deploy workflow
-        if: steps.changes.outputs.frontend == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh workflow run azure-static-web-apps-polite-smoke-0f9de4610.yml --ref deploy
-          echo "Triggered frontend deploy on deploy branch."
+          gh workflow run azure-static-web-apps-polite-smoke-0f9de4610.yml \
+            --ref deploy \
+            -f deploy_sha="${{ needs.bump-version.outputs.deploy_sha }}"
+          echo "Triggered frontend deploy for ${{ needs.bump-version.outputs.deploy_sha }}."
 
-      - name: No deploy workflows needed
-        if: steps.changes.outputs.backend != 'true' && steps.changes.outputs.frontend != 'true'
-        run: echo "Merge did not change frontend or backend deploy paths."
+  no-deploy-needed:
+    needs: [detect-changes, bump-version]
+    if: |
+      needs.detect-changes.outputs.backend != 'true' &&
+      needs.detect-changes.outputs.frontend != 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "No frontend or backend deploy workflows required for this merge."

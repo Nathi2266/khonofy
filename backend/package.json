@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "node --import ./instrument.js --watch src/index.js",
+    "dev": "prisma generate && node --import ./instrument.js --watch src/index.js",
     "start": "prisma generate && node server.js",
     "postinstall": "prisma generate",
     "prisma:generate": "prisma generate",
