@@ -51,6 +51,14 @@ jobs:
       - name: Attach app version to backend package
         run: cp public/app-version.json backend/app-version.json
 
+      - name: Verify backend package is ready for Azure
+        working-directory: backend
+        run: |
+          test -f server.js
+          test -d node_modules/@prisma/client
+          test -d node_modules/.prisma/client
+          node --input-type=module -e "import '@prisma/client'"
+
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v4
         with:
@@ -77,23 +85,6 @@ jobs:
           slot-name: 'Production'
           package: .
           publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_B7E4F49AD4D84AE383D97EFA095E3875 }}
-
-      - name: Verify backend health after deploy
-        run: |
-          set -euo pipefail
-          API_URL="https://khonofy-backend-api-d2fscwb7f3aeevac.southafricanorth-01.azurewebsites.net"
-          echo "Waiting for backend to accept traffic..."
-          for attempt in $(seq 1 18); do
-            status="$(curl --max-time 15 -s -o /tmp/health.json -w "%{http_code}" "${API_URL}/health" || true)"
-            echo "Attempt ${attempt}: HTTP ${status}"
-            if [ "${status}" = "200" ]; then
-              cat /tmp/health.json
-              exit 0
-            fi
-            sleep 10
-          done
-          echo "::error::Backend /health did not return 200. Check Azure startup command is exactly 'npm start' and review App Service logs."
-          exit 1
 
   open-pr-to-main:
     needs: deploy

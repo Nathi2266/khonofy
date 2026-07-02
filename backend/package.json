@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "prisma generate && node --import ./instrument.js --watch src/index.js",
-    "start": "prisma generate && node server.js",
+    "start": "node server.js",
     "postinstall": "prisma generate",
     "prisma:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",

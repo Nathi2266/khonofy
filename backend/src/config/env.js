@@ -5,22 +5,39 @@ export const PRODUCTION_FRONTEND_URL =
 
 const isAzureAppService = Boolean(process.env.WEBSITE_SITE_NAME || process.env.WEBSITE_HOSTNAME);
 
-const nodeEnv =
-  process.env.NODE_ENV
-  || (isAzureAppService ? 'production' : 'development');
+const nodeEnv = isAzureAppService
+  ? 'production'
+  : (process.env.NODE_ENV || 'development');
+
+function normalizeOrigin(origin) {
+  return String(origin || '').trim().replace(/\/$/, '');
+}
+
+function isAllowedStaticWebAppOrigin(origin) {
+  try {
+    const { hostname, protocol } = new URL(origin);
+    return protocol === 'https:' && hostname.endsWith('.azurestaticapps.net');
+  } catch {
+    return false;
+  }
+}
 
 function buildCorsOrigins() {
   const origins = new Set();
 
-  const frontendUrl =
-    process.env.FRONTEND_URL
-    || (nodeEnv === 'production' ? PRODUCTION_FRONTEND_URL : 'http://localhost:5173');
-  origins.add(frontendUrl);
-  origins.add(PRODUCTION_FRONTEND_URL);
+  const frontendUrl = isAzureAppService
+    ? PRODUCTION_FRONTEND_URL
+    : (
+      process.env.FRONTEND_URL
+      || (nodeEnv === 'production' ? PRODUCTION_FRONTEND_URL : 'http://localhost:5173')
+    );
+
+  origins.add(normalizeOrigin(frontendUrl));
+  origins.add(normalizeOrigin(PRODUCTION_FRONTEND_URL));
 
   if (process.env.CORS_ORIGINS) {
     for (const origin of process.env.CORS_ORIGINS.split(',')) {
-      const trimmed = origin.trim();
+      const trimmed = normalizeOrigin(origin);
       if (trimmed) origins.add(trimmed);
     }
   }
@@ -32,10 +49,15 @@ export const env = {
   databaseUrl: process.env.DATABASE_URL || '',
   port: Number(process.env.PORT || 3001),
   nodeEnv,
-  frontendUrl:
-    process.env.FRONTEND_URL
-    || (nodeEnv === 'production' ? PRODUCTION_FRONTEND_URL : 'http://localhost:5173'),
+  frontendUrl: isAzureAppService
+    ? PRODUCTION_FRONTEND_URL
+    : (
+      process.env.FRONTEND_URL
+      || (nodeEnv === 'production' ? PRODUCTION_FRONTEND_URL : 'http://localhost:5173')
+    ),
   corsOrigins: buildCorsOrigins(),
+  isAzureAppService,
+  isAllowedStaticWebAppOrigin,
   jwtSecret: process.env.JWT_SECRET || 'replace-me-in-development',
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || '7d',
   smtpHost: process.env.SMTP_HOST || '',
