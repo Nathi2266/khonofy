@@ -96,10 +96,30 @@ The API runs at `khonofy-backend-api` on Linux App Service. Required settings:
 |---------|--------|
 | `FRONTEND_URL` | `https://polite-smoke-0f9de4610.7.azurestaticapps.net` |
 | `NODE_ENV` | `production` |
-| **Startup command** | `npm start` only — remove `npx prisma generate &&` from the Azure portal |
+| `WEBSITE_NODE_DEFAULT_VERSION` | `~20` |
+| **Startup command** | `npm start` (with a space — not `npmstart`) — do **not** prefix with `npx prisma generate &&`; `npm start` already runs `prisma generate` before boot |
 | **Always On** | `true` |
 | **App Service plan** | Basic (B1) or higher — Free (F1) stops when daily quota is exceeded |
 
 Do **not** run `npm install` or `prisma db push` on every container start; that exceeds Azure's 230s startup timeout and returns 503 / browser CORS errors.
+
+### Login shows CORS / "Unable to reach the Khonofy API"
+
+That message usually means the API process is **not running**, not a frontend bug. Azure returns `503 Application Error` without CORS headers, and the browser reports a CORS failure.
+
+Common log-stream crash:
+
+```text
+SyntaxError: The requested module '@prisma/client' does not provide an export named 'PrismaClient'
+```
+
+Azure unpacks `node_modules.tar.gz` on boot; the generated Prisma client must be recreated at startup. The `npm start` script runs `prisma generate` automatically before launching the server.
+
+1. Open `https://khonofy-backend-api-d2fscwb7f3aeevac.southafricanorth-01.azurewebsites.net/health` — it must return `{"ok":true}`.
+2. In Azure Portal → **khonofy-backend-api** → **Configuration** → **General settings**:
+   - **Startup Command**: `npm start`
+   - **Stack**: Node 20 LTS (`WEBSITE_NODE_DEFAULT_VERSION=~20`)
+3. Confirm `DATABASE_URL`, `JWT_SECRET`, `FRONTEND_URL`, and `NODE_ENV=production` are set under **Environment variables**.
+4. Redeploy the backend workflow after code changes.
 
 Database migrations: run `npx prisma migrate deploy` manually or in CI when schema changes — not on app boot.
