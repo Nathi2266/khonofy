@@ -96,7 +96,7 @@ The API runs at `khonofy-backend-api` on Linux App Service. Required settings:
 |---------|--------|
 | `FRONTEND_URL` | `https://polite-smoke-0f9de4610.7.azurestaticapps.net` |
 | `NODE_ENV` | `production` |
-| **Startup command** | `npm start` (or `bash startup.sh`) |
+| **Startup command** | `npm start` only — remove `npx prisma generate &&` from the Azure portal |
 | **Always On** | `true` |
 | **App Service plan** | Basic (B1) or higher — Free (F1) stops when daily quota is exceeded |
 

@@ -45,7 +45,13 @@ on:
 
 jobs:
   set-app-version:
-    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.event.action != 'closed' && github.event.pull_request.user.login != 'github-actions[bot]')
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'push' && (
+        github.ref == 'refs/heads/main' ||
+        (github.ref == 'refs/heads/deploy' && contains(github.event.head_commit.message, 'chore: bump app version'))
+      )) ||
+      (github.event_name == 'pull_request' && github.event.action != 'closed' && github.event.pull_request.user.login != 'github-actions[bot]')
     runs-on: ubuntu-latest
     name: Set app version
     outputs:
@@ -67,7 +73,13 @@ jobs:
 
   build_and_deploy_job:
     needs: set-app-version
-    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.event.action != 'closed' && github.event.pull_request.user.login != 'github-actions[bot]')
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'push' && (
+        github.ref == 'refs/heads/main' ||
+        (github.ref == 'refs/heads/deploy' && contains(github.event.head_commit.message, 'chore: bump app version'))
+      )) ||
+      (github.event_name == 'pull_request' && github.event.action != 'closed' && github.event.pull_request.user.login != 'github-actions[bot]')
     runs-on: ubuntu-latest
     name: Build and Deploy Job
     permissions:

@@ -82,13 +82,14 @@ const base44 = createClient({
 Khonofy uses a staged GitHub Actions release pipeline:
 
 ```text
-feature branch -> CI -> deploy branch -> Azure deploys -> PR to main
+feature branch -> CI -> PR to deploy (manual merge) -> version bump -> Azure deploys -> PR to main
 ```
 
 ### What happens on a feature push
 - CI runs lint, typecheck, build, and dist verification
-- The branch is promoted into `deploy`
-- Version files are bumped on `deploy`
+- A PR from the feature branch into `deploy` is opened automatically (not merged)
+- You review and merge that PR when ready
+- Version files are bumped on `deploy` after the merge
 - Frontend and/or backend deploy workflows run when relevant files change
 - A PR from `deploy` to `main` is opened for manual final promotion
 

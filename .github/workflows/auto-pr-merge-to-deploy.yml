@@ -1,4 +1,4 @@
-# Feature branch push -> CI -> promote into deploy -> version bump -> deploy workflows -> PR deploy to main
+# Feature branch push -> CI -> open PR to deploy (manual merge required)
 name: Promote feature branches to deploy
 
 on:
@@ -9,12 +9,12 @@ on:
   workflow_dispatch:
     inputs:
       branch:
-        description: Feature branch to merge into deploy
+        description: Feature branch to promote into deploy
         required: true
         type: string
 
 concurrency:
-  group: auto-pr-via-deploy-${{ github.repository }}
+  group: promote-to-deploy-${{ github.repository }}
   cancel-in-progress: false
 
 jobs:
@@ -25,14 +25,14 @@ jobs:
       VITE_API_URL: ${{ secrets.VITE_API_URL }}
       VITE_SENTRY_DSN: ${{ secrets.VITE_SENTRY_DSN }}
 
-  promote-via-deploy:
+  open-pr-to-deploy:
+    name: Open PR to deploy
     needs: ci
     if: needs.ci.result == 'success'
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: read
       pull-requests: write
-      actions: write
     steps:
       - name: Resolve source branch
         id: branch
@@ -43,36 +43,8 @@ jobs:
             echo "name=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
           fi
 
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Detect backend and frontend changes
-        uses: dorny/paths-filter@v3
-        id: changes
-        with:
-          base: deploy
-          ref: ${{ steps.branch.outputs.name }}
-          filters: |
-            backend:
-              - 'backend/**'
-              - '.github/workflows/deploy_khonofy-backend-api.yml'
-            frontend:
-              - 'src/**'
-              - 'public/**'
-              - 'index.html'
-              - 'vite.config.js'
-              - 'tailwind.config.js'
-              - 'postcss.config.js'
-              - 'components.json'
-              - 'jsconfig.json'
-              - 'package.json'
-              - 'package-lock.json'
-              - 'scripts/**'
-              - '.github/workflows/azure-static-web-apps-polite-smoke-0f9de4610.yml'
-
-      - name: Open PR and merge into deploy
-        id: merge
+      - name: Open PR to deploy (no auto-merge)
+        id: pr
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
@@ -80,79 +52,19 @@ jobs:
           TARGET_BRANCH: deploy
         run: |
           set -euo pipefail
-          chmod +x scripts/merge-feature-into-deploy.sh
-          OUTPUT="$(scripts/merge-feature-into-deploy.sh)"
+          chmod +x scripts/open-feature-pr-to-deploy.sh
+          OUTPUT="$(scripts/open-feature-pr-to-deploy.sh)"
           printf '%s\n' "${OUTPUT}"
-          if printf '%s\n' "${OUTPUT}" | grep -q '^merged=false$'; then
-            echo "merged=false" >> "$GITHUB_OUTPUT"
+          if printf '%s\n' "${OUTPUT}" | grep -q '^pr_opened=false$'; then
+            echo "pr_opened=false" >> "$GITHUB_OUTPUT"
           else
-            echo "merged=true" >> "$GITHUB_OUTPUT"
+            echo "pr_opened=true" >> "$GITHUB_OUTPUT"
+            printf '%s\n' "${OUTPUT}" | grep '^pr_url=' | cut -d= -f2- >> "$GITHUB_OUTPUT"
+            printf '%s\n' "${OUTPUT}" | grep '^pr_number=' | cut -d= -f2- >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Bump semantic version on deploy
-        if: steps.merge.outputs.merged == 'true'
-        env:
-          GITHUB_RUN_NUMBER: ${{ github.run_number }}
-          GITHUB_SHA: ${{ github.sha }}
+      - name: PR ready for review
+        if: steps.pr.outputs.pr_opened == 'true'
         run: |
-          set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git fetch origin deploy
-          git checkout deploy
-          git pull --ff-only origin deploy
-          node scripts/bump-app-version.js
-          git add package.json package-lock.json public/app-version.json backend/package.json
-          if git diff --staged --quiet; then
-            echo "Version files already up to date."
-            exit 0
-          fi
-          git commit -m "chore: bump app version to 1.0.${GITHUB_RUN_NUMBER} [skip ci]"
-          git push origin deploy
-
-      - name: Checkout deploy for dist refresh
-        if: steps.merge.outputs.merged == 'true' && steps.changes.outputs.frontend == 'true'
-        uses: actions/checkout@v4
-        with:
-          ref: deploy
-          fetch-depth: 0
-
-      - name: Download CI frontend dist
-        if: steps.merge.outputs.merged == 'true' && steps.changes.outputs.frontend == 'true'
-        uses: actions/download-artifact@v4
-        with:
-          name: frontend-dist
-          path: frontend-dist
-
-      - name: Refresh CI dist for deploy branch
-        if: steps.merge.outputs.merged == 'true' && steps.changes.outputs.frontend == 'true'
-        run: |
-          chmod +x scripts/prepare-frontend-dist-for-deploy.sh scripts/verify-frontend-dist.sh
-          scripts/prepare-frontend-dist-for-deploy.sh frontend-dist
-          scripts/verify-frontend-dist.sh dist
-
-      - name: Upload frontend dist for Azure deploy
-        if: steps.merge.outputs.merged == 'true' && steps.changes.outputs.frontend == 'true'
-        uses: actions/upload-artifact@v4
-        with:
-          name: frontend-dist-deploy
-          path: dist
-          retention-days: 1
-
-      - name: Trigger backend deploy workflow
-        if: steps.merge.outputs.merged == 'true' && steps.changes.outputs.backend == 'true'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh workflow run deploy_khonofy-backend-api.yml --ref deploy
-          echo "Triggered backend deploy on deploy branch."
-
-      - name: Trigger frontend deploy workflow
-        if: steps.merge.outputs.merged == 'true' && steps.changes.outputs.frontend == 'true'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh workflow run azure-static-web-apps-polite-smoke-0f9de4610.yml \
-            --ref deploy \
-            -f caller_run_id="${{ github.run_id }}"
-          echo "Triggered frontend deploy on deploy branch (using CI dist artifact)."
+          echo "CI passed. Review and merge PR #${{ steps.pr.outputs.pr_number }}:"
+          echo "${{ steps.pr.outputs.pr_url }}"

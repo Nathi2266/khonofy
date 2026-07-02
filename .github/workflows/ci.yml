@@ -1,5 +1,5 @@
 # Quality gate for feature branches. Builds frontend once; dist is reused by Azure deploy.
-# Invoked by Auto PR merge to deploy before merging into deploy.
+# Invoked by Promote feature branches to deploy before opening the deploy PR.
 name: CI
 
 on:

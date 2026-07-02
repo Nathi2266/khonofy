@@ -1,0 +1,37 @@
+# After a feature PR is merged into deploy, bump the app version and push.
+# Deploy workflows run on the version-bump commit (not on the merge commit).
+name: Bump version on deploy
+
+on:
+  push:
+    branches:
+      - deploy
+
+jobs:
+  bump-version:
+    if: ${{ !contains(github.event.head_commit.message, 'chore: bump app version') }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: deploy
+          fetch-depth: 0
+
+      - name: Bump semantic version on deploy
+        env:
+          GITHUB_RUN_NUMBER: ${{ github.run_number }}
+          GITHUB_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          node scripts/bump-app-version.js
+          git add package.json package-lock.json public/app-version.json backend/package.json
+          if git diff --staged --quiet; then
+            echo "Version files already up to date."
+            exit 0
+          fi
+          git commit -m "chore: bump app version to 1.0.${GITHUB_RUN_NUMBER}"
+          git push origin deploy
