@@ -89,14 +89,9 @@ feature branch -> CI -> PR to deploy (manual merge) -> version bump -> Azure dep
 - CI runs lint, typecheck, build, and dist verification
 - A PR from the feature branch into `deploy` is opened automatically (not merged)
 - You review and merge that PR when ready
-### What happens after you merge into `deploy`
-- **Bump version on deploy** runs on the merge commit
-- It detects whether the merge changed **frontend** and/or **backend** files
-- It bumps version files and pushes a version commit
-- It triggers **only** the matching deploy workflows on `deploy`:
-  - backend changes → `deploy_khonofy-backend-api.yml`
-  - frontend changes → `azure-static-web-apps-polite-smoke-0f9de4610.yml`
-- When deploy workflows finish, a PR from `deploy` to `main` is opened for manual final promotion
+- Version files are bumped on `deploy` after the merge
+- Frontend and/or backend deploy workflows run when relevant files change
+- A PR from `deploy` to `main` is opened for manual final promotion
 
 ## Docs
 
