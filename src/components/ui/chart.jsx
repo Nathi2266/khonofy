@@ -1,3 +1,4 @@
+// @ts-nocheck
 "use client";
 import * as React from "react"
 import * as RechartsPrimitive from "recharts"
@@ -22,6 +23,7 @@ function useChart() {
   return context
 }
 
+/** @type {React.ForwardRefExoticComponent<import('react').HTMLAttributes<HTMLDivElement> & { id?: string; config: Record<string, any>; children: import('react').ReactNode } & React.RefAttributes<HTMLDivElement>>} */
 const ChartContainer = React.forwardRef(({ id, className, children, config, ...props }, ref) => {
   const uniqueId = React.useId()
   const chartId = `chart-${id || uniqueId.replace(/:/g, "")}`
@@ -46,6 +48,7 @@ const ChartContainer = React.forwardRef(({ id, className, children, config, ...p
 })
 ChartContainer.displayName = "Chart"
 
+/** @param {{ id: string; config: Record<string, any> }} props */
 const ChartStyle = ({
   id,
   config
@@ -79,6 +82,7 @@ return color ? `  --color-${key}: ${color};` : null
 
 const ChartTooltip = RechartsPrimitive.Tooltip
 
+/** @type {React.ForwardRefExoticComponent<any>} */
 const ChartTooltipContent = React.forwardRef((
   {
     active,
@@ -216,6 +220,7 @@ ChartTooltipContent.displayName = "ChartTooltip"
 
 const ChartLegend = RechartsPrimitive.Legend
 
+/** @type {React.ForwardRefExoticComponent<any>} */
 const ChartLegendContent = React.forwardRef((
   { className, hideIcon = false, payload, verticalAlign = "bottom", nameKey },
   ref

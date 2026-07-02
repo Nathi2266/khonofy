@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import * as Sentry from "@sentry/react";
 import { base44 } from "@/api/base44Client";
 import { useAuth } from "@/lib/AuthContext";
 import { getApiErrorMessage } from "@/lib/api-error";
@@ -9,7 +8,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Mail, Eye, EyeOff } from "lucide-react";
 import AuthLayout from "@/components/AuthLayout";
+import { getAppVersionLabel } from "@/lib/app-version";
 import khonoImage from "@/assets/images/khono.png";
+
+const appVersion = getAppVersionLabel();
 
 export default function Login() {
   const navigate = useNavigate();
@@ -19,8 +21,6 @@ export default function Login() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const [sentryTestMessage, setSentryTestMessage] = useState("");
-  const [sentryTestLoading, setSentryTestLoading] = useState(false);
 
   useEffect(() => {
     if (authChecked && isAuthenticated) {
@@ -55,47 +55,25 @@ export default function Login() {
   const passwordValue = password;
   const isFormComplete = Boolean(trimmedEmail && passwordValue);
 
-  const handleSentryTest = async () => {
-    setSentryTestMessage("");
-    setSentryTestLoading(true);
-    try {
-      if (!Sentry.getClient()) {
-        setSentryTestMessage(
-          "Sentry is not connected. Restart the dev server after adding VITE_SENTRY_DSN to .env.local, or test on the deployed site."
-        );
-        return;
-      }
-
-      const eventId = Sentry.captureException(
-        new Error("Khonofy login page Sentry connectivity test"),
-        {
-          tags: { source: "login-page", test: "true" },
-          level: "info",
-        }
-      );
-      await Sentry.flush(2000);
-      setSentryTestMessage(
-        eventId
-          ? `Test error sent to Sentry (event ${eventId}). Check the khonofy-frontend project.`
-          : "Test error sent to Sentry. Check the khonofy-frontend project."
-      );
-    } catch {
-      setSentryTestMessage("Failed to send test error to Sentry.");
-    } finally {
-      setSentryTestLoading(false);
-    }
-  };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
-    if (!trimmedEmail || !passwordValue) {
+    const form = e.currentTarget;
+    const emailInput = form.elements.namedItem("email");
+    const passwordInput = form.elements.namedItem("password");
+    const finalEmail = String(
+      emailInput instanceof HTMLInputElement ? emailInput.value : email
+    ).trim();
+    const finalPassword = String(
+      passwordInput instanceof HTMLInputElement ? passwordInput.value : password
+    );
+    if (!finalEmail || !finalPassword) {
       setError("Please fill in all required fields.");
       return;
     }
     setLoading(true);
     try {
-      await base44.auth.loginViaEmailPassword(trimmedEmail, passwordValue);
+      await base44.auth.loginViaEmailPassword(finalEmail, finalPassword);
       await checkUserAuth();
       navigate("/", { replace: true });
     } catch (err) {
@@ -123,6 +101,7 @@ export default function Login() {
         titleInCard
         compact
         afterCard={errorBanner}
+        footer={appVersion}
       >
         <form
           onSubmit={handleSubmit}
@@ -148,14 +127,17 @@ export default function Login() {
               <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" aria-hidden="true" />
               <Input
                 id="email"
+                name="email"
                 type="email"
                 autoComplete="email"
                 autoFocus
                 placeholder="you@khonology.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                onInput={(e) => setEmail(e.currentTarget.value)}
                 className="pl-10 h-12 rounded-full"
                 required
+                data-testid="login-email"
               />
             </div>
           </div>
@@ -164,13 +146,16 @@ export default function Login() {
             <div className="relative">
               <Input
                 id="password"
+                name="password"
                 type={showPassword ? "text" : "password"}
                 autoComplete="current-password"
                 placeholder="password123#"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                onInput={(e) => setPassword(e.currentTarget.value)}
                 className="h-12 rounded-full pl-4 pr-12"
                 required
+                data-testid="login-password"
               />
               <button
                 type="button"
@@ -186,28 +171,14 @@ export default function Login() {
               </button>
             </div>
           </div>
-          <Button type="submit" className="w-full h-12 rounded-full font-medium bg-primary hover:bg-primary/90 text-white" disabled={loading || !isFormComplete}>
+          <Button
+            type="submit"
+            className="w-full h-12 rounded-full font-medium bg-primary hover:bg-primary/90 text-white"
+            disabled={loading}
+            data-testid="login-submit"
+          >
             {loading ? "Logging in..." : "LOGIN"}
           </Button>
-          <div className="flex flex-col items-center gap-1 pt-1">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="h-7 rounded-full px-3 text-xs"
-              onClick={handleSentryTest}
-              disabled={sentryTestLoading}
-            >
-              {sentryTestLoading ? "Sending..." : "Test Sentry"}
-            </Button>
-            {sentryTestMessage ? (
-              <p className="text-center text-[11px] text-muted-foreground">{sentryTestMessage}</p>
-            ) : (
-              <p className="text-center text-[11px] text-muted-foreground">
-                Verify Sentry monitoring is working.
-              </p>
-            )}
-          </div>
         </form>
       </AuthLayout>
     </>

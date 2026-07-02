@@ -3,9 +3,14 @@ import { PrismaClient } from '@prisma/client';
 import { Pool } from 'pg';
 import { env } from '../config/env.js';
 
+const needsRelaxedSsl =
+  env.databaseUrl.includes('render.com')
+  || env.databaseUrl.includes('postgres.database.azure.com')
+  || env.databaseUrl.includes('azure.com');
+
 const pool = new Pool({
   connectionString: env.databaseUrl,
-  ssl: env.databaseUrl.includes('render.com') ? { rejectUnauthorized: false } : undefined,
+  ssl: needsRelaxedSsl ? { rejectUnauthorized: false } : undefined,
 });
 
 const adapter = new PrismaPg(pool);

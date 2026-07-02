@@ -23,21 +23,16 @@ import dashboardIcon10 from '@/assets/images/dashboard/10.png';
 import dashboardIcon18 from '@/assets/images/dashboard/18.png';
 import { Send, ChevronDown, Undo2, RotateCcw } from 'lucide-react';
 import { toast } from '@/components/ui/use-toast';
+import {
+  findTimesheetForWeek,
+  formatWeekRangeLabel,
+  getLocalToday,
+  getWeekBounds,
+  getWeekDayDates,
+  parseWeekDate,
+} from '@/utils/weekBounds';
 
 const REVOKE_WINDOW_MS = 24 * 60 * 60 * 1000;
-
-function getWeekBounds(offset = 0) {
-  const now = new Date();
-  const day = now.getDay();
-  const monday = new Date(now);
-  monday.setDate(now.getDate() - (day === 0 ? 6 : day - 1) + offset * 7);
-  const sunday = new Date(monday);
-  sunday.setDate(monday.getDate() + 6);
-  return {
-    start: monday.toISOString().split('T')[0],
-    end: sunday.toISOString().split('T')[0],
-  };
-}
 
 function getReviewedAt(timesheet) {
   if (timesheet.reviewed_at) return new Date(timesheet.reviewed_at);
@@ -74,7 +69,7 @@ const STATUS_CONFIG = {
   pending: { label: 'Pending Review', color: 'bg-amber-100 text-amber-700', iconSrc: TIMESHEET_STATUS_ICONS.pending },
   approved: { label: 'Approved', color: 'bg-emerald-100 text-emerald-700', iconSrc: TIMESHEET_STATUS_ICONS.approved },
   rejected: { label: 'Rejected', color: 'bg-red-100 text-red-600', iconSrc: TIMESHEET_STATUS_ICONS.rejected },
-  revoke_pending: { label: 'Revoke Pending', color: 'bg-purple-100 text-purple-700', useLucide: RotateCcw },
+  revoke_pending: { label: 'Revocation Pending', color: 'bg-purple-100 text-purple-700', useLucide: RotateCcw },
 };
 
 export default function TimesheetManagement() {
@@ -109,18 +104,68 @@ export default function TimesheetManagement() {
     departments.find((department) => department.id === user?.department_id)?.weekly_hour_target || 0
   );
 
-  const currentSheet = timesheets.find((timesheet) => timesheet.week_start === week.start);
+  const currentSheet = findTimesheetForWeek(timesheets, week);
   const totalHours = timeEntries.reduce((sum, entry) => sum + (entry.hours || 0), 0);
+  const hasAssignedAdmin = !!user?.admin_id;
+  const currentSheetStatus = currentSheet?.status || 'draft';
+  const weeklyHourTargetLabel = weeklyHourTarget > 0 ? `${weeklyHourTarget.toFixed(1).replace(/\.0$/, '')}h` : 'No target';
+  const readinessChecklist = [
+    {
+      label: 'Admin assigned',
+      passed: hasAssignedAdmin,
+      detail: hasAssignedAdmin
+        ? 'You can submit this week to your assigned admin.'
+        : 'A super admin must assign an admin before submission is allowed.',
+    },
+    {
+      label: 'Time logged this week',
+      passed: totalHours > 0,
+      detail: totalHours > 0
+        ? `${totalHours.toFixed(1)}h logged so far.`
+        : 'Log at least one time entry before submitting.',
+    },
+    {
+      label: 'Weekly target met',
+      passed: !weeklyHourTarget || totalHours >= weeklyHourTarget,
+      detail: !weeklyHourTarget
+        ? 'No weekly target is set for your department.'
+        : `${totalHours.toFixed(1)}h logged of ${weeklyHourTargetLabel} required.`,
+    },
+    {
+      label: 'Week is editable',
+      passed: !currentSheet || currentSheetStatus === 'draft' || currentSheetStatus === 'rejected',
+      detail: currentSheetStatus === 'approved'
+        ? 'Approved sheets are locked until a revocation is approved.'
+        : currentSheetStatus === 'revoke_pending'
+          ? 'The sheet is locked while your revocation request is waiting.'
+          : 'This week can be submitted.',
+    },
+  ];
+  const blockedChecklistItems = readinessChecklist.filter((item) => !item.passed);
+  const showReadinessChecklist = !currentSheet || currentSheetStatus === 'draft' || currentSheetStatus === 'rejected';
+  const isLocked = currentSheetStatus === 'approved' || currentSheetStatus === 'revoke_pending';
+  const lockReason = currentSheetStatus === 'approved'
+    ? 'This timesheet is locked because it has been approved.'
+    : currentSheetStatus === 'revoke_pending'
+      ? 'This timesheet is locked while your revocation request is waiting for admin review.'
+      : '';
+  const statusLabel = STATUS_CONFIG[currentSheetStatus]?.label || currentSheetStatus;
 
   const submitTimesheet = useMutation({
     mutationFn: async () => {
+      const allEntries = await base44.entities.TimeEntry.filter({ user_id: user.id });
+      const weekEntries = allEntries.filter(
+        (entry) => entry.date >= week.start && entry.date <= week.end
+      );
+      const submitTotalHours = weekEntries.reduce((sum, entry) => sum + (entry.hours || 0), 0);
+
       const payload = {
         user_id: user.id,
         user_name: user.full_name || user.email,
         department_id: user.department_id || '',
         week_start: week.start,
         week_end: week.end,
-        total_hours: totalHours,
+        total_hours: submitTotalHours,
         status: 'pending',
         submitted_at: new Date().toISOString(),
         admin_notes: '',
@@ -129,7 +174,7 @@ export default function TimesheetManagement() {
         reviewed_at: null,
       };
       const linkEntries = async (timesheetId) => {
-        for (const entry of timeEntries) {
+        for (const entry of weekEntries) {
           await base44.entities.TimeEntry.update(entry.id, { timesheet_id: timesheetId });
         }
       };
@@ -200,14 +245,8 @@ export default function TimesheetManagement() {
     return acc;
   }, {});
 
-  const dayLabels = [];
-  for (let index = 0; index < 7; index += 1) {
-    const date = new Date(week.start);
-    date.setDate(date.getDate() + index);
-    dayLabels.push(date.toISOString().split('T')[0]);
-  }
+  const dayLabels = getWeekDayDates(week.start);
 
-  const hasAssignedAdmin = !!user?.admin_id;
   const meetsHourTarget = !weeklyHourTarget || totalHours >= weeklyHourTarget;
   const canSubmit = hasAssignedAdmin
     && totalHours > 0
@@ -234,104 +273,153 @@ export default function TimesheetManagement() {
         </div>
       ) : null}
 
-      <div className="w-full space-y-6">
-        <div className="rounded-xl border border-border bg-card p-4">
-          <div className="mb-4 flex items-center justify-between">
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
+        <div className="min-w-0 space-y-5">
+          <div className="rounded-2xl border border-border bg-card p-4 md:p-5">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-3">
               <button
                 onClick={() => setWeekOffset(weekOffset - 1)}
-                className="flex h-8 w-8 items-center justify-center rounded-lg border border-border text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                className="flex h-8 w-8 items-center justify-center rounded-full border border-border text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
               >
                 ‹
               </button>
               <div className="text-center">
-                <p className="text-sm font-semibold text-foreground">
-                  Week of {new Date(week.start).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                  {' – '}
-                  {new Date(week.end).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                <p className="text-sm font-medium text-foreground">
+                  {formatWeekRangeLabel(week.start, week.end)}
                 </p>
-                {weekOffset === 0 ? <p className="text-xs font-medium text-primary">Current Week</p> : null}
+                {weekOffset === 0 ? (
+                  <p className="text-xs text-muted-foreground">Current week</p>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setWeekOffset(0)}
+                    className="mt-0.5 text-xs font-medium text-primary hover:underline"
+                  >
+                    Jump to current week
+                  </button>
+                )}
               </div>
               <button
                 onClick={() => setWeekOffset(weekOffset + 1)}
                 disabled={weekOffset >= 0}
-                className="flex h-8 w-8 items-center justify-center rounded-lg border border-border text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-40"
+                className="flex h-8 w-8 items-center justify-center rounded-full border border-border text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-40"
               >
                 ›
               </button>
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 rounded-full bg-muted/40 px-3 py-2">
               <DashboardIcon src={dashboardIcon5} className={DASHBOARD_ICON_SIZES.section} />
               <div className="text-right">
-                <p className="text-2xl font-bold text-primary">{totalHours.toFixed(1)}h</p>
-                <p className="text-xs text-muted-foreground">this week</p>
+                <p className="text-xl font-semibold text-foreground">{totalHours.toFixed(1)}h</p>
+                <p className="text-[11px] text-muted-foreground">logged this week</p>
               </div>
               {currentSheet ? <StatusBadge status={currentSheet.status} /> : null}
             </div>
           </div>
 
+          {showReadinessChecklist ? (
+          <div className="mb-4 rounded-xl border border-border bg-muted/20 px-4 py-3">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-medium text-foreground">Readiness checklist</p>
+                <p className="text-xs text-muted-foreground">
+                  {currentSheet ? `Status: ${statusLabel}.` : 'Status: Draft.'}
+                </p>
+              </div>
+              <span className="text-xs text-muted-foreground">
+                {blockedChecklistItems.length === 0 ? 'Ready to submit' : `${blockedChecklistItems.length} items missing`}
+              </span>
+            </div>
+            <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+              {readinessChecklist.map((item) => (
+                <div
+                  key={item.label}
+                  className={`rounded-lg border px-3 py-2 ${
+                    item.passed ? 'border-border bg-background' : 'border-amber-200 bg-amber-50'
+                  }`}
+                >
+                  <p className="text-sm font-medium text-foreground">{item.label}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">{item.detail}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+          ) : null}
+
           {currentSheet?.status === 'pending' ? (
-            <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700">
-              <span>This timesheet is waiting for admin review.</span>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="gap-1.5 border-amber-300 bg-white text-amber-800 hover:bg-amber-100"
-                onClick={() => setTimesheetToWithdraw(currentSheet)}
-              >
-                <Undo2 className="h-3.5 w-3.5" />
-                Withdraw
-              </Button>
+            <div className="mb-4 rounded-xl border border-border bg-background px-4 py-3 text-sm text-muted-foreground">
+              <div className="flex items-center justify-between gap-3">
+                <span>This timesheet is waiting for admin review.</span>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5"
+                  onClick={() => setTimesheetToWithdraw(currentSheet)}
+                >
+                  <Undo2 className="h-3.5 w-3.5" />
+                  Withdraw
+                </Button>
+              </div>
             </div>
           ) : null}
 
           {currentSheet?.status === 'revoke_pending' ? (
-            <div className="mb-4 rounded-lg border border-purple-200 bg-purple-50 px-3 py-2 text-sm text-purple-800">
-              Your revocation request is waiting for admin approval. The calendar stays locked until your admin approves or declines it.
+            <div className="mb-4 rounded-xl border border-border bg-background px-4 py-3 text-sm text-muted-foreground">
+              <div className="flex items-center justify-between gap-3">
+                <span>Revocation requested. The week stays locked until admin decides.</span>
+                <span className="text-xs">Pending review</span>
+              </div>
               {currentSheet.revoke_requested_at ? (
-                <span className="mt-1 block text-xs text-purple-700">
+                <p className="mt-1 text-xs text-muted-foreground">
                   Requested on {new Date(currentSheet.revoke_requested_at).toLocaleString()}
-                </span>
+                </p>
               ) : null}
             </div>
           ) : null}
 
           {currentSheet?.status === 'approved' && canRevokeTimesheet(currentSheet) ? (
-            <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
-              <span>
-                Approved. You can revoke until {currentSheetRevokeDeadline?.toLocaleString()}.
-              </span>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="gap-1.5 border-emerald-300 bg-white text-emerald-800 hover:bg-emerald-100"
-                onClick={() => setTimesheetToRevoke(currentSheet)}
-              >
-                <RotateCcw className="h-3.5 w-3.5" />
-                Revoke
-              </Button>
-            </div>
-          ) : null}
-
-          {currentSheet?.status === 'draft' && currentSheet.withdrawn_at ? (
-            <div className="mb-4 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
-              You withdrew this timesheet on {new Date(currentSheet.withdrawn_at).toLocaleString()}. You can edit your entries and submit again.
-            </div>
-          ) : null}
-
-          {currentSheet?.status === 'draft' && currentSheet.revoked_at ? (
-            <div className="mb-4 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
-              Your admin approved your revocation on {new Date(currentSheet.revoked_at).toLocaleString()}. You can edit your entries and submit again.
+            <div className="mb-4 rounded-xl border border-border bg-background px-4 py-3 text-sm text-muted-foreground">
+              <div className="flex items-center justify-between gap-3">
+                <span>Approved. Revocation is available until {currentSheetRevokeDeadline?.toLocaleString()}.</span>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5"
+                  onClick={() => setTimesheetToRevoke(currentSheet)}
+                >
+                  <RotateCcw className="h-3.5 w-3.5" />
+                  Revoke
+                </Button>
+              </div>
             </div>
           ) : null}
 
           {currentSheet?.admin_notes && currentSheet.status === 'rejected' ? (
-            <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3">
-              <p className="text-xs font-semibold text-red-700">Rejection reason:</p>
-              <p className="mt-0.5 text-sm text-red-700">{currentSheet.admin_notes}</p>
+            <div className="mb-4 rounded-xl border border-border bg-background px-4 py-3">
+              <p className="text-xs font-medium text-muted-foreground">Rejection note</p>
+              <p className="mt-1 text-sm text-foreground">{currentSheet.admin_notes}</p>
+            </div>
+          ) : null}
+
+          {currentSheet?.status === 'draft' && currentSheet.withdrawn_at ? (
+            <div className="mb-4 rounded-xl border border-border bg-background px-4 py-3 text-sm text-muted-foreground">
+              Withdrawn on {new Date(currentSheet.withdrawn_at).toLocaleString()}. You can edit and submit again.
+            </div>
+          ) : null}
+
+          {currentSheet?.status === 'draft' && currentSheet.revoked_at ? (
+            <div className="mb-4 rounded-xl border border-border bg-background px-4 py-3 text-sm text-muted-foreground">
+              Revocation approved on {new Date(currentSheet.revoked_at).toLocaleString()}. You can edit and submit again.
+            </div>
+          ) : null}
+
+          {isLocked ? (
+            <div className="mb-4 rounded-xl border border-border bg-background px-4 py-3 text-sm text-muted-foreground">
+              {lockReason}
             </div>
           ) : null}
 
@@ -339,24 +427,21 @@ export default function TimesheetManagement() {
             {dayLabels.map((dateStr) => {
               const entries = byDate[dateStr] || [];
               const dayHours = entries.reduce((sum, entry) => sum + (entry.hours || 0), 0);
-              const dayName = new Date(dateStr).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-              const isToday = dateStr === new Date().toISOString().split('T')[0];
+              const dayName = parseWeekDate(dateStr).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+              const isToday = dateStr === getLocalToday();
               const hasEntries = entries.length > 0;
               return (
-                <div
-                  key={dateStr}
-                  className={`rounded-lg border transition-colors ${isToday ? 'border-primary/30 bg-primary/5' : 'border-border'}`}
-                >
+                <div key={dateStr} className={`rounded-xl border ${isToday ? 'border-primary/20 bg-primary/5' : 'border-border bg-background'}`}>
                   <div
                     className={`flex items-center justify-between px-3 py-2.5 ${hasEntries ? 'cursor-pointer' : ''}`}
                     onClick={() => hasEntries && setExpanded(expanded === dateStr ? null : dateStr)}
                   >
                     <div className="flex items-center gap-2">
-                      <span className={`text-sm font-medium ${isToday ? 'text-primary' : 'text-foreground'}`}>{dayName}</span>
-                      {isToday ? <span className="rounded-full bg-primary px-1.5 py-0.5 text-xs font-medium text-white">Today</span> : null}
+                      <span className="text-sm font-medium text-foreground">{dayName}</span>
+                      {isToday ? <span className="rounded-full bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">Today</span> : null}
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className={`text-sm font-semibold ${dayHours > 0 ? 'text-foreground' : 'text-muted-foreground'}`}>
+                      <span className={`text-sm font-medium ${dayHours > 0 ? 'text-foreground' : 'text-muted-foreground'}`}>
                         {dayHours > 0 ? `${dayHours.toFixed(1)}h` : '—'}
                       </span>
                       {hasEntries ? (
@@ -367,7 +452,7 @@ export default function TimesheetManagement() {
                   {expanded === dateStr ? (
                     <div className="space-y-1.5 border-t border-border px-3 pb-3">
                       {entries.map((entry) => (
-                        <div key={entry.id} className="flex items-start justify-between rounded-md bg-background px-2 py-1.5">
+                        <div key={entry.id} className="flex items-start justify-between rounded-md bg-muted/30 px-2 py-1.5">
                           <div>
                             <p className="text-sm font-medium text-foreground">{entry.task_title || 'Task'}</p>
                             {entry.description ? <p className="text-xs text-muted-foreground">{entry.description}</p> : null}
@@ -388,32 +473,34 @@ export default function TimesheetManagement() {
           ) : null}
           {hasAssignedAdmin && weeklyHourTarget > 0 && !meetsHourTarget ? (
             <p className="text-xs text-amber-700">
-              You need at least {weeklyHourTarget}h logged this week before you can submit ({totalHours.toFixed(1)}h so far).
+              You need at least {weeklyHourTargetLabel} logged this week before you can submit ({totalHours.toFixed(1)}h so far).
             </p>
           ) : null}
             <Button
               onClick={() => submitTimesheet.mutate()}
-              disabled={!canSubmit || submitTimesheet.isPending}
+              disabled={!canSubmit || submitTimesheet.isPending || isLocked}
               className="gap-2"
             >
               <Send className="h-4 w-4" />
-              {submitTimesheet.isPending ? 'Submitting...' : 'Submit for Approval'}
+              {submitTimesheet.isPending ? 'Submitting...' : currentSheetStatus === 'revoke_pending' ? 'Locked for Revocation Review' : 'Submit for Approval'}
             </Button>
+          </div>
           </div>
         </div>
 
-        <div className="rounded-xl border border-border bg-card p-5">
-          <h2 className="mb-4 font-semibold text-foreground">Timesheet History</h2>
-          <div className="space-y-2">
-            {timesheets.sort((left, right) => new Date(right.week_start) - new Date(left.week_start)).map((timesheet) => (
-              <div key={timesheet.id} className="flex items-center justify-between rounded-lg bg-muted/40 px-4 py-3 transition-colors hover:bg-muted/60">
+        <aside className="space-y-5 xl:sticky xl:top-6">
+          <div className="rounded-2xl border border-border bg-card p-4 md:p-5">
+            <h2 className="mb-3 text-sm font-medium text-foreground">Timesheet history</h2>
+            <div className="space-y-2">
+            {[...timesheets].sort((left, right) => new Date(right.week_start).getTime() - new Date(left.week_start).getTime()).map((timesheet) => (
+              <div key={timesheet.id} className="flex items-center justify-between rounded-xl border border-border bg-background px-4 py-3">
                 <div>
                   <p className="text-sm font-medium text-foreground">
-                    {new Date(timesheet.week_start).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                    {' – '}
-                    {new Date(timesheet.week_end).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                    {formatWeekRangeLabel(timesheet.week_start, timesheet.week_end)}
                   </p>
-                  <p className="text-xs text-muted-foreground">{timesheet.total_hours || 0}h logged</p>
+                  <p className="text-xs text-muted-foreground">
+                    {(currentSheet?.id === timesheet.id ? totalHours : timesheet.total_hours || 0).toFixed(1).replace(/\.0$/, '')}h logged
+                  </p>
                   {timesheet.withdrawn_at ? (
                     <p className="mt-0.5 text-xs text-slate-600">
                       Withdrawn on {new Date(timesheet.withdrawn_at).toLocaleString()}
@@ -468,8 +555,9 @@ export default function TimesheetManagement() {
                 <p className="text-sm text-muted-foreground">No timesheets submitted yet.</p>
               </div>
             ) : null}
+            </div>
           </div>
-        </div>
+        </aside>
       </div>
 
       <AlertDialog open={!!timesheetToWithdraw} onOpenChange={() => setTimesheetToWithdraw(null)}>

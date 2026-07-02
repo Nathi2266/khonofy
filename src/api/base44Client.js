@@ -1,5 +1,6 @@
 import { clearAuthToken, getAuthToken, setAuthToken } from '@/lib/auth-storage';
 import { beginRequest, endRequest } from '@/lib/loading-bus';
+import { captureApiError } from '@/lib/sentry-client';
 
 /**
  * Local Khonofy API (Express + PostgreSQL via DATABASE_URL).
@@ -64,6 +65,14 @@ async function request(path, { method = 'GET', body, query, auth = true, showGlo
     }
 
     return data;
+  } catch (error) {
+    captureApiError(error, {
+      method,
+      path,
+      status: error?.status,
+      apiBase: API_BASE,
+    });
+    throw error;
   } finally {
     if (showGlobalLoader) endRequest();
   }

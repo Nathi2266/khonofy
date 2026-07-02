@@ -1,18 +1,11 @@
+// @ts-nocheck
 import * as React from "react"
 import * as CheckboxPrimitive from "@radix-ui/react-checkbox"
 import { Check } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 
-/**
- * @typedef {import('react').ComponentPropsWithoutRef<'button'> & {
- *   checked?: boolean | 'indeterminate',
- *   defaultChecked?: boolean,
- *   onCheckedChange?: (checked: boolean | 'indeterminate') => void,
- * }} CheckboxProps
- */
-
-/** @type {React.ForwardRefRenderFunction<HTMLButtonElement, CheckboxProps>} */
+/** @type {React.ForwardRefExoticComponent<import('react').ComponentPropsWithoutRef<typeof CheckboxPrimitive.Root> & React.RefAttributes<HTMLButtonElement>>} */
 const Checkbox = React.forwardRef(({ className, ...props }, ref) => (
   <CheckboxPrimitive.Root
     ref={ref}

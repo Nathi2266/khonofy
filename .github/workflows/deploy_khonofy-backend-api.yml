@@ -1,5 +1,6 @@
 # Docs for the Azure Web Apps Deploy action: https://github.com/Azure/webapps-deploy
 # More GitHub Actions for Azure: https://github.com/Azure/actions
+# Runs on deploy (and main) when backend files change. Last job opens PR deploy -> main.
 
 name: Build and deploy Node.js app to Azure Web App - khonofy-backend-api
 
@@ -22,6 +23,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Log app version
+        run: |
+          node -e "const v=require('./public/app-version.json'); console.log('Deploying backend release', v.full || v.version)"
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
@@ -36,6 +41,14 @@ jobs:
       - name: Generate Prisma client
         run: npx prisma generate
         working-directory: backend
+
+      - name: Attach app version to backend package
+        run: cp public/app-version.json backend/app-version.json
+
+      - name: Prepare source-only deploy package
+        run: |
+          chmod +x backend/startup.sh
+          rm -rf backend/node_modules
 
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v4
@@ -63,3 +76,45 @@ jobs:
           slot-name: 'Production'
           package: .
           publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_B7E4F49AD4D84AE383D97EFA095E3875 }}
+
+      - name: Wait for Azure backend health
+        run: |
+          url="https://khonofy-backend-api-d2fscwb7f3aeevac.southafricanorth-01.azurewebsites.net/health"
+          for attempt in $(seq 1 18); do
+            status="$(curl -s -o /tmp/health.json -w "%{http_code}" --max-time 20 "$url" || true)"
+            if [ "$status" = "200" ]; then
+              cat /tmp/health.json
+              echo "Backend healthy after ${attempt} attempt(s)"
+              exit 0
+            fi
+            echo "Attempt ${attempt}/18: HTTP ${status:-000}, retrying in 20s..."
+            sleep 20
+          done
+          echo "Backend did not become healthy in time"
+          exit 1
+
+  open-pr-to-main:
+    needs: deploy
+    if: |
+      needs.deploy.result == 'success' &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
+      github.ref == 'refs/heads/deploy'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: deploy
+          fetch-depth: 0
+
+      - name: Open PR from deploy to main when deploys are done
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SELF_WORKFLOW: backend
+          DEPLOY_SHA: ${{ github.sha }}
+        run: |
+          chmod +x scripts/open-deploy-pr-to-main.sh
+          scripts/open-deploy-pr-to-main.sh

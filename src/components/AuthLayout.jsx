@@ -87,10 +87,21 @@ export default function AuthLayout({
           {afterCard}
         </div>
 
-        {footer ? (
-          <p className="text-center text-sm text-muted-foreground mt-6 select-none">{footer}</p>
-        ) : null}
       </div>
+
+      {footer ? (
+        <div className="absolute bottom-4 left-0 right-0 z-20 flex justify-center px-4">
+          <div
+            className={cn(
+              "rounded-full px-3 py-1.5 text-xs font-semibold tracking-wide shadow-lg backdrop-blur-md",
+              "border border-black/15 bg-white/85 text-gray-900",
+              "dark:border-white/25 dark:bg-black/60 dark:text-white"
+            )}
+          >
+            {footer}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

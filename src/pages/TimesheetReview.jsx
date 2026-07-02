@@ -107,14 +107,14 @@ export default function TimesheetReview() {
 
   const resolveDepartmentName = (timesheet) => {
     const departmentId = timesheet.department_id || staffById[timesheet.user_id]?.department_id;
-    return departmentsById[departmentId]?.name || 'Unassigned';
+    return departmentsById[departmentId]?.name || 'No department';
   };
 
   const sortedTimesheets = useMemo(() => {
     return [...timesheets].sort((left, right) => {
       const leftDate = new Date(left.submitted_at || left.created_date || left.week_start);
       const rightDate = new Date(right.submitted_at || right.created_date || right.week_start);
-      return rightDate - leftDate;
+      return rightDate.getTime() - leftDate.getTime();
     });
   }, [timesheets]);
 

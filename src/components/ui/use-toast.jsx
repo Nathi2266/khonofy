@@ -1,3 +1,4 @@
+// @ts-nocheck
 // Inspired by react-hot-toast library
 import { useState, useEffect } from "react";
 

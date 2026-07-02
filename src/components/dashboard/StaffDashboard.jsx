@@ -15,14 +15,37 @@ import { ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import PageHeader from '@/components/PageHeader';
 import PageShell from '@/components/PageShell';
+import {
+  findTimesheetForWeek,
+  formatWeekRangeLabel,
+  getWeekBounds,
+} from '@/utils/weekBounds';
 
 export default function StaffDashboard({ user }) {
   const today = new Date().toISOString().split('T')[0];
+  const currentWeek = getWeekBounds(0);
 
   const { data: myTasks = [] } = useQuery({
     queryKey: ['myTasks', user.id],
-    queryFn: () => base44.entities.Task.filter({ assigned_to: user.id }),
+    queryFn: async () => {
+      const [assigned, created] = await Promise.all([
+        base44.entities.Task.filter({ assigned_to: user.id }),
+        base44.entities.Task.filter({ created_by_id: user.id }),
+      ]);
+      const merged = new Map();
+      [...assigned, ...created].forEach((task) => merged.set(task.id, task));
+      return [...merged.values()];
+    },
     enabled: !!user.id,
+  });
+
+  const { data: weekEntries = [] } = useQuery({
+    queryKey: ['weekEntries', user.id, currentWeek.start, currentWeek.end],
+    queryFn: () => base44.entities.TimeEntry.filter({ user_id: user.id }),
+    enabled: !!user.id,
+    select: (entries) => entries.filter(
+      (entry) => entry.date >= currentWeek.start && entry.date <= currentWeek.end
+    ),
   });
 
   const { data: todayEntries = [] } = useQuery({
@@ -38,9 +61,14 @@ export default function StaffDashboard({ user }) {
   });
 
   const hoursToday = todayEntries.reduce((sum, e) => sum + (e.hours || 0), 0);
+  const currentWeekHours = weekEntries.reduce((sum, entry) => sum + (entry.hours || 0), 0);
   const openTasks = myTasks.filter(t => t.status !== 'completed').length;
   const completedTasks = myTasks.filter(t => t.status === 'completed').length;
-  const pendingTimesheet = timesheets.find(t => t.status === 'pending');
+  const currentWeekSheet = findTimesheetForWeek(timesheets, currentWeek);
+  const timesheetStatus = getTimesheetStatusDisplay(timesheets, currentWeek, currentWeekSheet);
+  const sortedTimesheets = [...timesheets].sort(
+    (left, right) => new Date(right.week_start).getTime() - new Date(left.week_start).getTime()
+  );
 
   return (
     <PageShell>
@@ -69,9 +97,10 @@ export default function StaffDashboard({ user }) {
         <StatsCard label="Completed Tasks" value={completedTasks} iconSrc={dashboardIcon20} color="green" />
         <StatsCard
           label="Timesheet Status"
-          value={pendingTimesheet ? 'Pending' : 'Up to date'}
-          iconSrc={pendingTimesheet ? dashboardIcon3 : dashboardIcon20}
-          color={pendingTimesheet ? 'amber' : 'green'}
+          value={timesheetStatus.value}
+          iconSrc={timesheetStatus.iconSrc}
+          color={timesheetStatus.color}
+          sub={timesheetStatus.sub}
         />
       </div>
 
@@ -111,13 +140,26 @@ export default function StaffDashboard({ user }) {
             </Link>
           </div>
           <div className="space-y-2">
-            {timesheets.slice(0, 5).map(ts => (
+            {sortedTimesheets.slice(0, 5).map(ts => (
               <div key={ts.id} className="flex items-center justify-between py-2 px-3 rounded-lg bg-muted/50">
                 <div>
-                  <p className="text-sm font-medium text-foreground">
-                    Week of {new Date(ts.week_start).toLocaleDateString()}
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-medium text-foreground">
+                      {formatWeekRangeLabel(ts.week_start, ts.week_end)}
+                    </p>
+                    {currentWeekSheet?.id === ts.id ? (
+                      <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
+                        Current week
+                      </span>
+                    ) : null}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {(
+                      currentWeekSheet?.id === ts.id && currentWeekHours > 0
+                        ? currentWeekHours
+                        : ts.total_hours || 0
+                    ).toFixed(1).replace(/\.0$/, '')}h logged
                   </p>
-                  <p className="text-xs text-muted-foreground">{ts.total_hours || 0}h logged</p>
                 </div>
                 <StatusBadge status={ts.status} />
               </div>
@@ -142,6 +184,48 @@ function StatusBadge({ status }) {
       {status === 'pending' ? 'Pending Review' : status}
     </span>
   );
+}
+
+function getTimesheetStatusDisplay(timesheets, currentWeek, currentWeekSheet) {
+  const pendingSheet = timesheets.find((sheet) => sheet.status === 'pending');
+  if (pendingSheet) {
+    return {
+      value: 'Pending review',
+      color: 'amber',
+      iconSrc: dashboardIcon3,
+      sub: 'Awaiting admin',
+    };
+  }
+  if (currentWeekSheet?.status === 'rejected') {
+    return {
+      value: 'Rejected',
+      color: 'red',
+      iconSrc: dashboardIcon3,
+      sub: 'Action needed',
+    };
+  }
+  if (currentWeekSheet?.status === 'approved') {
+    return {
+      value: 'Approved',
+      color: 'green',
+      iconSrc: dashboardIcon20,
+      sub: 'This week locked',
+    };
+  }
+  if (currentWeekSheet?.status === 'revoke_pending') {
+    return {
+      value: 'Revoke pending',
+      color: 'amber',
+      iconSrc: dashboardIcon3,
+      sub: 'Admin deciding',
+    };
+  }
+  return {
+    value: 'This week open',
+    color: 'amber',
+    iconSrc: dashboardIcon10,
+    sub: 'Log time & submit',
+  };
 }
 
 function getGreeting() {

@@ -1,6 +1,13 @@
+# Runs on deploy (and main) when frontend files change. Last job opens PR deploy -> main.
 name: Azure Static Web Apps CI/CD
 
 on:
+  workflow_dispatch:
+    inputs:
+      caller_run_id:
+        description: Auto PR workflow run ID with frontend-dist-deploy artifact
+        required: false
+        type: string
   push:
     branches:
       - main
@@ -9,65 +16,165 @@ on:
       - 'src/**'
       - 'public/**'
       - 'index.html'
-      - 'package.json'
-      - 'package-lock.json'
       - 'vite.config.js'
-      - 'src/instrument.js'
       - 'tailwind.config.js'
       - 'postcss.config.js'
+      - 'components.json'
+      - 'jsconfig.json'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'scripts/**'
       - '.github/workflows/azure-static-web-apps-polite-smoke-0f9de4610.yml'
   pull_request:
     types: [opened, synchronize, reopened, closed]
     branches:
       - main
-      - deploy
+    paths:
+      - 'src/**'
+      - 'public/**'
+      - 'index.html'
+      - 'vite.config.js'
+      - 'tailwind.config.js'
+      - 'postcss.config.js'
+      - 'components.json'
+      - 'jsconfig.json'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'scripts/**'
+      - '.github/workflows/azure-static-web-apps-polite-smoke-0f9de4610.yml'
 
 jobs:
+  set-app-version:
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.event.action != 'closed' && github.event.pull_request.user.login != 'github-actions[bot]')
+    runs-on: ubuntu-latest
+    name: Set app version
+    outputs:
+      app_version: ${{ steps.version.outputs.app_version }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Generate build version
+        id: version
+        run: |
+          SHORT_SHA="${GITHUB_SHA::7}"
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BUILD_VERSION="khonofy@1.0.pr${{ github.event.pull_request.number }}+${SHORT_SHA}"
+          else
+            SEMVER="$(node -p "require('./package.json').version")"
+            BUILD_VERSION="khonofy@${SEMVER}+${SHORT_SHA}"
+          fi
+          echo "app_version=${BUILD_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "Build version: ${BUILD_VERSION}"
+
   build_and_deploy_job:
-    if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.action != 'closed')
+    needs: set-app-version
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.event.action != 'closed' && github.event.pull_request.user.login != 'github-actions[bot]')
     runs-on: ubuntu-latest
     name: Build and Deploy Job
     permissions:
       id-token: write
       contents: read
+      actions: read
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: true
           lfs: false
-      - name: Install OIDC Client from Core Package
-        run: npm install @actions/core@1.6.0 @actions/http-client
-      - name: Get Id Token
-        uses: actions/github-script@v6
-        id: idtoken
+
+      - name: Log build version
+        run: |
+          node -e "const p=require('./package.json'); console.log('> ' + p.name + '@' + p.version + ' build')"
+
+      - name: Download prebuilt frontend dist from CI
+        if: github.event_name == 'workflow_dispatch' && inputs.caller_run_id != ''
+        uses: actions/download-artifact@v4
         with:
-          script: |
-            const coredemo = require('@actions/core')
-            return await coredemo.getIDToken()
-          result-encoding: string
-      - name: Build And Deploy
-        id: builddeploy
-        uses: Azure/static-web-apps-deploy@v1
+          name: frontend-dist-deploy
+          run-id: ${{ inputs.caller_run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: frontend-dist-deploy
+
+      - name: Prepare clean dist from CI build
+        if: github.event_name == 'workflow_dispatch' && inputs.caller_run_id != ''
+        run: |
+          chmod +x scripts/prepare-frontend-dist-for-deploy.sh scripts/verify-frontend-dist.sh
+          scripts/prepare-frontend-dist-for-deploy.sh frontend-dist-deploy
+          rm -rf frontend-dist-deploy
+
+      - name: Set up Node.js
+        if: github.event_name != 'workflow_dispatch' || inputs.caller_run_id == ''
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          cache: 'npm'
+
+      - name: Build frontend for deploy
+        if: github.event_name != 'workflow_dispatch' || inputs.caller_run_id == ''
         env:
           VITE_API_URL: ${{ secrets.VITE_API_URL }}
           VITE_SENTRY_DSN: ${{ secrets.VITE_SENTRY_DSN }}
           VITE_SENTRY_ENVIRONMENT: production
-          VITE_APP_VERSION: ${{ secrets.SENTRY_RELEASE }}
+          VITE_APP_VERSION: ${{ needs.set-app-version.outputs.app_version }}
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
           SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
           SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
-          SENTRY_RELEASE: ${{ secrets.SENTRY_RELEASE }}
+          SENTRY_RELEASE: ${{ needs.set-app-version.outputs.app_version }}
+        run: |
+          npm ci
+          npm run build
+
+      - name: Verify production dist output
+        run: |
+          chmod +x scripts/verify-frontend-dist.sh
+          scripts/verify-frontend-dist.sh dist
+
+      - name: Get Id Token
+        uses: actions/github-script@v6
+        id: idtoken
+        with:
+          script: return await core.getIDToken()
+          result-encoding: string
+
+      - name: Deploy production dist to Azure Static Web Apps
+        uses: Azure/static-web-apps-deploy@v1
+        env:
+          VITE_APP_VERSION: ${{ needs.set-app-version.outputs.app_version }}
+          SENTRY_RELEASE: ${{ needs.set-app-version.outputs.app_version }}
         with:
           azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_POLITE_SMOKE_0F9DE4610 }}
           action: "upload"
-          app_location: "/"
+          app_location: "dist"
           api_location: ""
-          output_location: "dist"
-          app_build_command: "npm run build"
+          skip_app_build: true
           github_id_token: ${{ steps.idtoken.outputs.result }}
 
+  open-pr-to-main:
+    needs: build_and_deploy_job
+    if: |
+      needs.build_and_deploy_job.result == 'success' &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
+      github.ref == 'refs/heads/deploy'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: deploy
+          fetch-depth: 0
+
+      - name: Open PR from deploy to main when deploys are done
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SELF_WORKFLOW: frontend
+          DEPLOY_SHA: ${{ github.sha }}
+        run: |
+          chmod +x scripts/open-deploy-pr-to-main.sh
+          scripts/open-deploy-pr-to-main.sh
+
   close_pull_request_job:
-    if: github.event_name == 'pull_request' && github.event.action == 'closed'
+    if: github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.user.login != 'github-actions[bot]'
     runs-on: ubuntu-latest
     name: Close Pull Request Job
     steps:

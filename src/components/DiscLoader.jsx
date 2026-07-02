@@ -19,7 +19,7 @@ const SIZE_CLASSES = {
  * Khonofy disc loader — three arcs in a row:
  * left CW, middle CCW, right CW.
  */
-export default function DiscLoader({ size = 'md', className, label = 'Loading' }) {
+export default function DiscLoader({ size = 'md', className = undefined, label = 'Loading' }) {
   const dimension = SIZE_CLASSES[size] || SIZE_CLASSES.md;
 
   return (

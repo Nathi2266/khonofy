@@ -20,7 +20,6 @@ import dashboardIcon2 from '@/assets/images/dashboard/2.png';
 import dashboardIcon3 from '@/assets/images/dashboard/3.png';
 import dashboardIcon4 from '@/assets/images/dashboard/4.png';
 import dashboardIcon20 from '@/assets/images/dashboard/20.png';
-import dashboardIcon10 from '@/assets/images/dashboard/10.png';
 import dashboardIcon11 from '@/assets/images/dashboard/11.png';
 import dashboardIcon12 from '@/assets/images/dashboard/12.png';
 import dashboardIcon13 from '@/assets/images/dashboard/13.png';
@@ -81,6 +80,7 @@ function toDayKey(date) {
   return d.toISOString().slice(0, 10);
 }
 
+/** @param {any[]} items @param {number} days @param {(item: any) => number} [valueGetter] */
 function buildDailySeries(items, days, valueGetter = () => 1) {
   const now = new Date();
   now.setHours(0, 0, 0, 0);
@@ -148,6 +148,18 @@ function MiniSparkline({ data, tone = 'primary' }) {
   );
 }
 
+/**
+ * @param {object} props
+ * @param {string} props.label
+ * @param {any} props.value
+ * @param {import('react').ComponentType<{ className?: string }>} [props.icon]
+ * @param {string} [props.iconSrc]
+ * @param {number[]} [props.series]
+ * @param {string} [props.tone]
+ * @param {{ label: string; positive: boolean }} [props.trend]
+ * @param {string} [props.note]
+ * @param {boolean} [props.featured]
+ */
 function KpiCard({ label, value, icon: Icon, iconSrc, series, tone = 'primary', trend, note, featured = false }) {
   const theme = KPI_TONES[tone] || KPI_TONES.primary;
   const TrendIcon = trend?.positive ? TrendingUp : TrendingDown;
@@ -183,6 +195,14 @@ function KpiCard({ label, value, icon: Icon, iconSrc, series, tone = 'primary', 
   );
 }
 
+/**
+ * @param {object} props
+ * @param {import('react').ComponentType<{ className?: string }>} [props.icon]
+ * @param {string} [props.iconSrc]
+ * @param {string} props.title
+ * @param {string} props.description
+ * @param {import('react').ReactNode} [props.action]
+ */
 function SectionHeader({ icon: Icon, iconSrc, title, description, action }) {
   return (
     <div className="mb-4 flex items-start justify-between gap-4">
@@ -202,6 +222,12 @@ function SectionHeader({ icon: Icon, iconSrc, title, description, action }) {
   );
 }
 
+/**
+ * @param {object} props
+ * @param {import('react').ComponentType<{ className?: string }>} props.icon
+ * @param {string} props.title
+ * @param {string} props.description
+ */
 function EmptyState({ icon: Icon, title, description }) {
   return (
     <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-muted/20 px-6 py-10 text-center">
@@ -321,7 +347,7 @@ export default function SuperuserDashboard() {
 
   const liveSummary = useMemo(() => [
     { label: 'Blocked tasks', value: blockedTasks.length, tone: blockedTasks.length > 0 ? 'red' : 'green', iconSrc: dashboardIcon13 },
-    { label: 'Pending approvals', value: pendingTimesheets.length, tone: pendingTimesheets.length > 0 ? 'amber' : 'green', iconSrc: dashboardIcon3 },
+    { label: 'Org pending approvals', value: pendingTimesheets.length, tone: pendingTimesheets.length > 0 ? 'amber' : 'green', iconSrc: dashboardIcon3 },
     { label: 'Active projects', value: activeProjects.length, tone: 'primary', iconSrc: dashboardIcon4 },
     { label: 'Recent events', value: recentLogs.length, tone: 'purple', iconSrc: dashboardIcon16 },
   ], [activeProjects.length, blockedTasks.length, pendingTimesheets.length, recentLogs.length]);
@@ -345,7 +371,7 @@ export default function SuperuserDashboard() {
           {[
             { label: 'Staff', value: staffUsers.length, iconSrc: dashboardIcon1 },
             { label: 'Projects', value: allProjects.length, iconSrc: dashboardIcon2 },
-            { label: 'Pending', value: pendingTimesheets.length, iconSrc: dashboardIcon3 },
+            { label: 'Org Pending', value: pendingTimesheets.length, iconSrc: dashboardIcon3 },
             { label: 'Activity', value: recentLogs.length, iconSrc: dashboardIcon4 },
           ].map((item) => (
             <div key={item.label} className="flex flex-col items-center rounded-2xl border border-border bg-card px-3 py-3 text-center shadow-sm">
@@ -390,12 +416,12 @@ export default function SuperuserDashboard() {
             series={projectSeries}
           />
           <KpiCard
-            label="Pending Approvals"
+            label="Org Pending Approvals"
             value={pendingTimesheets.length}
             iconSrc={dashboardIcon3}
             tone="amber"
             trend={approvalsTrend}
-            note="Timesheets awaiting review."
+            note="Organization-wide timesheets awaiting review."
             series={approvalsSeries}
           />
           <KpiCard
@@ -418,7 +444,7 @@ export default function SuperuserDashboard() {
             </div>
             <div>
               <p className="text-sm font-semibold text-foreground">
-                {pendingTimesheets.length} timesheet{pendingTimesheets.length > 1 ? 's' : ''} are waiting for approval
+                {pendingTimesheets.length} timesheet{pendingTimesheets.length > 1 ? 's' : ''} awaiting approval organization-wide
               </p>
               <p className="mt-1 text-xs text-muted-foreground">
                 Keep an eye on approvals to maintain flow across the teams.

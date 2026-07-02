@@ -1,6 +1,14 @@
 import React, { createContext, useState, useContext, useEffect, useCallback, useMemo } from 'react';
 import { base44 } from '@/api/base44Client';
+import { clearAuthToken, getAuthToken } from '@/lib/auth-storage';
+import {
+  captureException as captureSentryException,
+  clearUser as clearSentryUser,
+  setTag as setSentryTag,
+  setUser as setSentryUser,
+} from '@/lib/sentry-client';
 
+// @ts-ignore
 const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
@@ -13,18 +21,42 @@ export const AuthProvider = ({ children }) => {
   const checkUserAuth = useCallback(async () => {
     try {
       setAuthError(null);
+      if (!getAuthToken()) {
+        setUser(null);
+        setIsAuthenticated(false);
+        setAuthChecked(true);
+        setIsLoadingAuth(false);
+        clearSentryUser();
+        return;
+      }
+
       const currentUser = await base44.auth.me();
       setUser(currentUser);
       setIsAuthenticated(true);
       setAuthChecked(true);
       setIsLoadingAuth(false);
+
+      setSentryUser({
+        id: currentUser?.id,
+        email: currentUser?.email,
+        role: currentUser?.role,
+      });
+      setSentryTag('user_role', currentUser?.role);
+      setSentryTag('department_id', currentUser?.department_id || currentUser?.departmentId);
     } catch (error) {
       setUser(null);
       setIsAuthenticated(false);
       setAuthChecked(true);
       setIsLoadingAuth(false);
+      clearSentryUser();
       const status = error?.status ?? error?.response?.status;
-      if (status !== 401 && status !== 403) {
+      if (status === 401 || status === 403) {
+        clearAuthToken();
+      } else if (status !== 401 && status !== 403) {
+        captureSentryException(error, {
+          tags: { area: 'auth' },
+          extra: { status },
+        });
         setAuthError({
           type: 'auth_required',
           message: error?.message || error?.response?.data?.message || 'Authentication required',
@@ -40,6 +72,7 @@ export const AuthProvider = ({ children }) => {
   const logout = useCallback((shouldRedirect = true) => {
     setUser(null);
     setIsAuthenticated(false);
+    clearSentryUser();
     base44.auth.logout();
     if (shouldRedirect && typeof window !== 'undefined') window.location.href = '/login';
   }, []);

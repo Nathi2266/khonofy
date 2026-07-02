@@ -58,6 +58,57 @@ function sendError(res, status, message) {
   return res.status(status).json({ message });
 }
 
+function captureIfNeeded(error, req, { status, route } = {}) {
+  if (!error) return;
+
+  // eslint-disable-next-line no-underscore-dangle
+  if (typeof error === 'object' && error.__sentryCaptured) return;
+
+  const statusNumber = Number(status ?? error?.statusCode ?? error?.status);
+  const name = String(error?.name || '');
+  const isInternal4xx =
+    statusNumber >= 400
+    && statusNumber < 500
+    && (
+      name === 'TypeError'
+      || name === 'ReferenceError'
+      || name === 'SyntaxError'
+      || name.startsWith('Prisma')
+      || error?.isDependencyError
+    );
+
+  const shouldCapture =
+    (Number.isFinite(statusNumber) && (statusNumber >= 500 || statusNumber === 408 || statusNumber === 429))
+    || isInternal4xx;
+
+  if (!shouldCapture) return;
+
+  try {
+    // eslint-disable-next-line no-underscore-dangle
+    error.__sentryCaptured = true;
+  } catch {
+    // ignore
+  }
+
+  Sentry.captureException(error, {
+    level: statusNumber >= 500 ? 'error' : 'warning',
+    tags: {
+      area: 'http',
+      route: route || req?.route?.path || req?.path || 'unknown',
+      method: req?.method,
+      status: Number.isFinite(statusNumber) ? String(statusNumber) : undefined,
+    },
+    extra: {
+      status: Number.isFinite(statusNumber) ? statusNumber : undefined,
+      url: req?.originalUrl || req?.url,
+      userId: req?.authUser?.id,
+      dependency: error?.dependency,
+      dependencyContext: error?.dependencyContext,
+      prismaCode: error?.code,
+    },
+  });
+}
+
 function resourceConfig(resource) {
   return RESOURCE_MAP[resource];
 }
@@ -81,6 +132,9 @@ async function requireAuth(req, res, next) {
     const user = await currentUserFromRequest(req);
     if (!user) return sendError(res, 401, 'Authentication required');
     req.authUser = user;
+    Sentry.setUser({ id: user.id, email: user.email, role: user.role });
+    Sentry.setTag('user_role', user.role);
+    Sentry.setTag('department_id', user.departmentId);
     return next();
   } catch {
     return sendError(res, 401, 'Authentication required');
@@ -162,6 +216,22 @@ async function assertAdminCanAssignStaff(admin, staffId, { previousAssignee = nu
   if (previousAssignee && previousAssignee === staffId) return;
 
   throw new Error('You can only assign tasks to staff on your team');
+}
+
+async function assertStaffCanAssignTeammate(staffUser, staffId) {
+  if (!staffId) return;
+
+  const assignee = await prisma.user.findUnique({ where: { id: staffId } });
+  if (!assignee || assignee.role !== 'staff') {
+    throw new Error('Assigned user must be a staff member');
+  }
+
+  if (staffId === staffUser.id) return;
+
+  const creator = await prisma.user.findUnique({ where: { id: staffUser.id } });
+  if (creator?.adminId && assignee.adminId === creator.adminId) return;
+
+  throw new Error('You can only assign tasks to yourself or teammates on your team');
 }
 
 async function resolveTaskAssignee(payload) {
@@ -883,13 +953,17 @@ async function handleCreate(resource, user, body) {
 
   if (cfg.model === 'task') {
     required(payload.title, 'title');
-    if (!isSuperuser(user) && !isAdmin(user)) {
+    if (user.role === 'staff') {
+      if (payload.assignedTo) {
+        await assertStaffCanAssignTeammate(user, payload.assignedTo);
+        await resolveTaskAssignee(payload);
+      }
+    } else if (!isSuperuser(user) && !isAdmin(user)) {
       throw new Error('Forbidden');
-    }
-    if (isAdmin(user) && payload.assignedTo) {
+    } else if (isAdmin(user) && payload.assignedTo) {
       await assertAdminCanAssignStaff(user, payload.assignedTo);
-    }
-    if (payload.assignedTo) {
+      await resolveTaskAssignee(payload);
+    } else if (payload.assignedTo) {
       await resolveTaskAssignee(payload);
     }
     payload.createdById = user.id;
@@ -1052,7 +1126,9 @@ async function handleUpdate(resource, user, id, body) {
 
   let payload = coerceDates(cfg.model, normalizeInput(body));
   if (cfg.model === 'task') {
-    if (isAdmin(user) && payload.assignedTo) {
+    if (user.role === 'staff' && payload.assignedTo) {
+      await assertStaffCanAssignTeammate(user, payload.assignedTo);
+    } else if (isAdmin(user) && payload.assignedTo) {
       await assertAdminCanAssignStaff(user, payload.assignedTo, { previousAssignee: existing.assignedTo });
     }
     if (payload.assignedTo !== undefined) {
@@ -1233,21 +1309,25 @@ async function handleDelete(resource, user, id) {
   return serializeRecord(cfg.serialize, record);
 }
 
+const localDevOrigin = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;
+
 app.use(
   cors({
-    origin:
-      env.nodeEnv === 'development'
-        ? (origin, callback) => {
-            if (
-              !origin ||
-              /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)
-            ) {
-              callback(null, true);
-              return;
-            }
-            callback(null, env.frontendUrl);
-          }
-        : env.frontendUrl,
+    origin: (origin, callback) => {
+      if (!origin) {
+        callback(null, true);
+        return;
+      }
+      if (env.nodeEnv === 'development' && localDevOrigin.test(origin)) {
+        callback(null, true);
+        return;
+      }
+      if (env.corsOrigins.includes(origin)) {
+        callback(null, true);
+        return;
+      }
+      callback(null, false);
+    },
     credentials: true,
   })
 );
@@ -1255,7 +1335,11 @@ app.use(express.json({ limit: '15mb' }));
 
 app.get('/health', (_req, res) => res.json({ ok: true }));
 
-app.get('/health/base44', async (_req, res) => {
+app.get('/api/debug/sentry-test', (_req, _res) => {
+  throw new Error('Khonofy backend Sentry connectivity test');
+});
+
+app.get('/health/base44', async (req, res) => {
   if (!isBase44Configured()) {
     return res.status(503).json({
       ok: false,
@@ -1268,6 +1352,7 @@ app.get('/health/base44', async (_req, res) => {
     await base44.entities.User.list(undefined, 1);
     return res.json({ ok: true, configured: true });
   } catch (error) {
+    captureIfNeeded(error, req, { status: 502, route: '/health/base44' });
     const message = error?.response?.data?.message || error?.message || 'Base44 request failed';
     return res.status(502).json({ ok: false, configured: true, message });
   }
@@ -1299,6 +1384,7 @@ app.post('/api/auth/register', async (req, res) => {
       user: serializeRecord('user', user),
     });
   } catch (error) {
+    captureIfNeeded(error, req, { status: 400, route: '/api/auth/register' });
     return sendError(res, 400, error.message || 'Registration failed');
   }
 });
@@ -1317,6 +1403,7 @@ app.post('/api/auth/login', async (req, res) => {
     });
   } catch (error) {
     console.error('Login failed:', error);
+    captureIfNeeded(error, req, { status: 400, route: '/api/auth/login' });
     return sendError(res, 400, 'Login failed. Please try again.');
   }
 });
@@ -1348,11 +1435,12 @@ app.patch('/api/auth/me', requireAuth, async (req, res) => {
     });
     return res.json(serializeRecord('user', updated));
   } catch (error) {
+    captureIfNeeded(error, req, { status: 400, route: '/api/auth/me' });
     return sendError(res, 400, error.message || 'Update failed');
   }
 });
 
-app.get('/api/imagekit/auth', requireAuth, async (_req, res) => {
+app.get('/api/imagekit/auth', requireAuth, async (req, res) => {
   try {
     if (!env.imagekitPublicKey || !env.imagekitPrivateKey || !env.imagekitUrlEndpoint) {
       return sendError(res, 503, 'ImageKit is not configured');
@@ -1360,6 +1448,7 @@ app.get('/api/imagekit/auth', requireAuth, async (_req, res) => {
 
     return res.json(buildImageKitAuth());
   } catch (error) {
+    captureIfNeeded(error, req, { status: 400, route: '/api/imagekit/auth' });
     return sendError(res, 400, error.message || 'ImageKit auth failed');
   }
 });
@@ -1383,6 +1472,7 @@ app.post('/api/auth/forgot-password', async (req, res) => {
     }
     return res.json({ ok: true });
   } catch (error) {
+    captureIfNeeded(error, req, { status: 400, route: '/api/auth/forgot-password' });
     return sendError(res, 400, error.message || 'Password reset request failed');
   }
 });
@@ -1411,6 +1501,7 @@ app.post('/api/auth/reset-password', async (req, res) => {
     });
     return res.json({ ok: true });
   } catch (error) {
+    captureIfNeeded(error, req, { status: 400, route: '/api/auth/reset-password' });
     return sendError(res, 400, error.message || 'Password reset failed');
   }
 });
@@ -1432,7 +1523,9 @@ app.post('/api/ai/chat', requireAuth, async (req, res) => {
 
     return res.json(response);
   } catch (error) {
-    return sendError(res, error.statusCode || 400, error.message || 'AI request failed');
+    const status = error.statusCode || 400;
+    captureIfNeeded(error, req, { status, route: '/api/ai/chat' });
+    return sendError(res, status, error.message || 'AI request failed');
   }
 });
 
@@ -1457,7 +1550,9 @@ app.post('/api/ai/voice-ticket', requireAuth, async (req, res) => {
 
     return res.json(response);
   } catch (error) {
-    return sendError(res, error.statusCode || 400, error.message || 'Voice ticket generation failed');
+    const status = error.statusCode || 400;
+    captureIfNeeded(error, req, { status, route: '/api/ai/voice-ticket' });
+    return sendError(res, status, error.message || 'Voice ticket generation failed');
   }
 });
 
@@ -1467,7 +1562,9 @@ app.post('/api/ai/log-ticket', requireAuth, async (req, res) => {
     const task = await createTaskFromAiTicket(req.authUser, payload.ticketDraft || {});
     return res.status(201).json(serializeRecord('task', task));
   } catch (error) {
-    return sendError(res, error.statusCode || 400, error.message || 'Ticket logging failed');
+    const status = error.statusCode || 400;
+    captureIfNeeded(error, req, { status, route: '/api/ai/log-ticket' });
+    return sendError(res, status, error.message || 'Ticket logging failed');
   }
 });
 
@@ -1498,7 +1595,9 @@ app.post('/api/ai/scan-user-import', requireAuth, async (req, res) => {
     });
     return res.json(result);
   } catch (error) {
-    return sendError(res, error.statusCode || 400, error.message || 'AI document scan failed');
+    const status = error.statusCode || 400;
+    captureIfNeeded(error, req, { status, route: '/api/ai/scan-user-import' });
+    return sendError(res, status, error.message || 'AI document scan failed');
   }
 });
 
@@ -1540,7 +1639,9 @@ app.get('/api/calendar/entries', requireAuth, async (req, res) => {
     return res.json(serializeMany('timeEntry', records));
   } catch (error) {
     if (error.message === 'Forbidden') return sendError(res, 403, 'Forbidden');
-    return sendError(res, error.statusCode || 400, error.message || 'Calendar query failed');
+    const status = error.statusCode || 400;
+    captureIfNeeded(error, req, { status, route: '/api/calendar/entries' });
+    return sendError(res, status, error.message || 'Calendar query failed');
   }
 });
 
@@ -1563,7 +1664,9 @@ app.get('/api/:resource', requireAuth, async (req, res) => {
     });
     return res.json(serializeMany(cfg.serialize, records));
   } catch (error) {
-    return sendError(res, 400, error.message || 'List failed');
+    const status = error.statusCode || 400;
+    captureIfNeeded(error, req, { status, route: '/api/:resource (list)' });
+    return sendError(res, status, error.message || 'List failed');
   }
 });
 
@@ -1573,7 +1676,9 @@ app.post('/api/:resource', requireAuth, async (req, res) => {
     return res.status(201).json(record);
   } catch (error) {
     if (error.message === 'Forbidden') return sendError(res, 403, 'Forbidden');
-    return sendError(res, 400, error.message || 'Create failed');
+    const status = error.statusCode || 400;
+    captureIfNeeded(error, req, { status, route: '/api/:resource (create)' });
+    return sendError(res, status, error.message || 'Create failed');
   }
 });
 
@@ -1592,7 +1697,9 @@ app.get('/api/:resource/:id', requireAuth, async (req, res) => {
     }
     return res.json(serializeRecord(cfg.serialize, record));
   } catch (error) {
-    return sendError(res, 400, error.message || 'Fetch failed');
+    const status = error.statusCode || 400;
+    captureIfNeeded(error, req, { status, route: '/api/:resource/:id (fetch)' });
+    return sendError(res, status, error.message || 'Fetch failed');
   }
 });
 
@@ -1603,7 +1710,9 @@ app.patch('/api/:resource/:id', requireAuth, async (req, res) => {
     return res.json(record);
   } catch (error) {
     if (error.message === 'Forbidden') return sendError(res, 403, 'Forbidden');
-    return sendError(res, 400, error.message || 'Update failed');
+    const status = error.statusCode || 400;
+    captureIfNeeded(error, req, { status, route: '/api/:resource/:id (update)' });
+    return sendError(res, status, error.message || 'Update failed');
   }
 });
 
@@ -1614,7 +1723,9 @@ app.delete('/api/:resource/:id', requireAuth, async (req, res) => {
     return res.json(record);
   } catch (error) {
     if (error.message === 'Forbidden') return sendError(res, 403, 'Forbidden');
-    return sendError(res, 400, error.message || 'Delete failed');
+    const status = error.statusCode || 400;
+    captureIfNeeded(error, req, { status, route: '/api/:resource/:id (delete)' });
+    return sendError(res, status, error.message || 'Delete failed');
   }
 });
 
@@ -1627,8 +1738,10 @@ app.listen(env.port, '0.0.0.0', async () => {
     await prisma.$connect();
   } catch (error) {
     console.error('Database connection failed:', error.message);
+    Sentry.captureException(error, { tags: { area: 'startup' } });
   }
 
   console.log(`Backend running at http://localhost:${env.port}`);
   console.log(`Frontend should run at ${env.frontendUrl}`);
+  console.log(`CORS origins: ${env.corsOrigins.join(', ')}`);
 });

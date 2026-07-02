@@ -67,6 +67,11 @@ function buildTaskPayload(form, user, { isEdit = false, assignee = null } = {}) 
   const assignedTo = assignee?.id ?? form.assigned_to;
   const assignedToName = assignee?.full_name ?? form.assigned_to_name;
 
+  if (!isEdit && user?.role === 'staff' && !assignedTo) {
+    payload.assigned_to = user.id;
+    payload.assigned_to_name = user.full_name || user.email || undefined;
+  }
+
   if (assignedTo) {
     payload.assigned_to = assignedTo;
     payload.assigned_to_name = assignedToName || undefined;
@@ -162,7 +167,7 @@ export default function TaskManagement() {
       stats[entry.task_id].entries.push(entry);
     }
     for (const taskId of Object.keys(stats)) {
-      stats[taskId].entries.sort((a, b) => new Date(b.date) - new Date(a.date));
+      stats[taskId].entries.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     }
     return stats;
   }, [timeEntries]);

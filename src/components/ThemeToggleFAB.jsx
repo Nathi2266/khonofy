@@ -2,7 +2,7 @@ import { useTheme } from 'next-themes';
 import { Sun, Moon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-export default function ThemeToggleFAB({ className, fixed = true }) {
+export default function ThemeToggleFAB({ className = undefined, fixed = true }) {
   const { theme, setTheme } = useTheme();
 
   return (

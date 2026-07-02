@@ -86,7 +86,7 @@ export default function SuperuserTimesheetFeedback() {
     return [...allTimesheets].sort((left, right) => {
       const leftDate = new Date(left.submitted_at || left.created_date || left.week_start);
       const rightDate = new Date(right.submitted_at || right.created_date || right.week_start);
-      return rightDate - leftDate;
+      return rightDate.getTime() - leftDate.getTime();
     });
   }, [allTimesheets]);
 
