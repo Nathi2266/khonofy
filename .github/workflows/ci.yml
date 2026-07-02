@@ -1,0 +1,62 @@
+# Quality gate for feature branches. Builds frontend once; dist is reused by Azure deploy.
+# Invoked by Auto PR merge to deploy before merging into deploy.
+name: CI
+
+on:
+  workflow_call:
+    secrets:
+      VITE_API_URL:
+        required: false
+      VITE_SENTRY_DSN:
+        required: false
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          cache: 'npm'
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Lint frontend
+        run: npm run lint
+
+      - name: Typecheck frontend
+        run: npm run typecheck
+
+      - name: Build frontend
+        env:
+          VITE_API_URL: ${{ secrets.VITE_API_URL }}
+          VITE_SENTRY_DSN: ${{ secrets.VITE_SENTRY_DSN }}
+          VITE_SENTRY_ENVIRONMENT: production
+        run: npm run build
+
+      - name: Verify production dist output
+        run: |
+          chmod +x scripts/verify-frontend-dist.sh
+          scripts/verify-frontend-dist.sh dist
+
+      - name: Upload frontend dist for deploy
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: dist
+          retention-days: 1
+
+      - name: Install backend dependencies
+        run: npm ci --prefix backend
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+        working-directory: backend
