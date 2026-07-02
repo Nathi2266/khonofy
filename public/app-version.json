@@ -1,7 +1,15 @@
 {
-  "version": "1.0.10",
-  "full": "khonofy@1.0.10+736ee10",
-  "build": 10,
-  "sha": "736ee10",
-  "updatedAt": "2026-06-26T01:32:16.747Z"
+<<<<<<< HEAD
+  "version": "1.0.17",
+  "full": "khonofy@1.0.17+dec43e3",
+  "build": 17,
+  "sha": "dec43e3",
+  "updatedAt": "2026-07-01T13:47:42.577Z"
+=======
+  "version": "1.0.14",
+  "full": "khonofy@1.0.14+8d9b510",
+  "build": 14,
+  "sha": "8d9b510",
+  "updatedAt": "2026-06-26T08:31:00.285Z"
+>>>>>>> e904dde60b121c279e221784b15fbe32837f9523
 }
