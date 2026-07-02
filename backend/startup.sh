@@ -5,6 +5,6 @@ cd "$(dirname "$0")"
 
 echo "[startup] Node version: $(node -v)"
 echo "[startup] Working directory: $(pwd)"
-echo "[startup] Launching Khonofy backend via npm start"
+echo "[startup] Launching Khonofy backend via node server.js"
 
-exec npm start
+exec node server.js
