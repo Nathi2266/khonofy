@@ -78,7 +78,7 @@ jobs:
           API_URL="https://khonofy-backend-api-d2fscwb7f3aeevac.southafricanorth-01.azurewebsites.net"
           echo "Waiting for backend to accept traffic..."
           for attempt in $(seq 1 18); do
-            status="$(curl -s -o /tmp/health.json -w "%{http_code}" "${API_URL}/health" || true)"
+            status="$(curl --max-time 15 -s -o /tmp/health.json -w "%{http_code}" "${API_URL}/health" || true)"
             echo "Attempt ${attempt}: HTTP ${status}"
             if [ "${status}" = "200" ]; then
               cat /tmp/health.json
