@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "node --import ./instrument.js --watch src/index.js",
-    "start": "node --import ./instrument.js src/index.js",
+    "start": "node server.js",
     "postinstall": "prisma generate",
     "prisma:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
@@ -22,10 +22,11 @@
     "express": "^5.1.0",
     "jsonwebtoken": "^9.0.2",
     "pg": "^8.16.3",
+    "prisma": "^6.15.0",
     "zod": "^4.1.8"
   },
-  "devDependencies": {
-    "prisma": "^6.15.0"
+  "engines": {
+    "node": ">=20"
   },
   "version": "1.0.17"
 }

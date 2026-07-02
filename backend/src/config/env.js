@@ -3,7 +3,11 @@ import 'dotenv/config';
 export const PRODUCTION_FRONTEND_URL =
   'https://polite-smoke-0f9de4610.7.azurestaticapps.net';
 
-const nodeEnv = process.env.NODE_ENV || 'development';
+const isAzureAppService = Boolean(process.env.WEBSITE_SITE_NAME || process.env.WEBSITE_HOSTNAME);
+
+const nodeEnv =
+  process.env.NODE_ENV
+  || (isAzureAppService ? 'production' : 'development');
 
 function buildCorsOrigins() {
   const origins = new Set();
