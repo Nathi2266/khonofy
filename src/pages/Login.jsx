@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import { useAuth } from "@/lib/AuthContext";
-import { getApiErrorMessage } from "@/lib/api-error";
+import { getApiErrorMessage, isIncorrectPasswordError } from "@/lib/api-error";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -19,6 +19,7 @@ export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [passwordError, setPasswordError] = useState("");
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
@@ -58,6 +59,7 @@ export default function Login() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
+    setPasswordError("");
     const form = e.currentTarget;
     const emailInput = form.elements.namedItem("email");
     const passwordInput = form.elements.namedItem("password");
@@ -77,7 +79,14 @@ export default function Login() {
       await checkUserAuth();
       navigate("/", { replace: true });
     } catch (err) {
-      setError(getApiErrorMessage(err, "Invalid email or password"));
+      const message = getApiErrorMessage(err, "Invalid email or password");
+      if (isIncorrectPasswordError(err)) {
+        setPasswordError(message);
+        setError("");
+      } else {
+        setError(message);
+        setPasswordError("");
+      }
     } finally {
       setLoading(false);
     }
@@ -151,9 +160,17 @@ export default function Login() {
                 autoComplete="current-password"
                 placeholder="password123#"
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                onInput={(e) => setPassword(e.currentTarget.value)}
-                className="h-12 rounded-full pl-4 pr-12"
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  if (passwordError) setPasswordError("");
+                }}
+                onInput={(e) => {
+                  setPassword(e.currentTarget.value);
+                  if (passwordError) setPasswordError("");
+                }}
+                className={`h-12 rounded-full pl-4 pr-12${passwordError ? " border-destructive focus-visible:ring-destructive" : ""}`}
+                aria-invalid={passwordError ? true : undefined}
+                aria-describedby={passwordError ? "password-error" : undefined}
                 required
                 data-testid="login-password"
               />
@@ -170,6 +187,11 @@ export default function Login() {
                 )}
               </button>
             </div>
+            {passwordError ? (
+              <p id="password-error" className="text-sm text-destructive" role="alert">
+                {passwordError}
+              </p>
+            ) : null}
           </div>
           <Button
             type="submit"

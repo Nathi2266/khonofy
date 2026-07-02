@@ -157,16 +157,6 @@ function normalizeEmail(value) {
   return String(value || '').trim().toLowerCase();
 }
 
-async function findUserByEmailAndPassword(email, password) {
-  const normalizedEmail = normalizeEmail(email);
-  const matches = await prisma.user.findMany({ where: { email: normalizedEmail } });
-  for (const user of matches) {
-    const ok = await comparePassword(password, user.passwordHash);
-    if (ok) return user;
-  }
-  return null;
-}
-
 function normalizeTaskPriority(value) {
   return VALID_TASK_PRIORITIES.has(value) ? value : 'medium';
 }
@@ -1395,12 +1385,20 @@ app.post('/api/auth/login', async (req, res) => {
     const normalizedEmail = String(email || '').trim().toLowerCase();
     required(normalizedEmail, 'email');
     required(password, 'password');
-    const user = await findUserByEmailAndPassword(normalizedEmail, password);
-    if (!user) return sendError(res, 401, 'Invalid email or password');
-    return res.json({
-      access_token: signAccessToken(user),
-      user: serializeRecord('user', user),
-    });
+    const matches = await prisma.user.findMany({ where: { email: normalizedEmail } });
+    if (matches.length === 0) {
+      return sendError(res, 401, 'Invalid email or password');
+    }
+    for (const user of matches) {
+      const ok = await comparePassword(password, user.passwordHash);
+      if (ok) {
+        return res.json({
+          access_token: signAccessToken(user),
+          user: serializeRecord('user', user),
+        });
+      }
+    }
+    return sendError(res, 401, 'Incorrect password');
   } catch (error) {
     console.error('Login failed:', error);
     captureIfNeeded(error, req, { status: 400, route: '/api/auth/login' });

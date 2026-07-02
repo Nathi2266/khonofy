@@ -8,7 +8,6 @@ on:
   push:
     branches:
       - main
-      - deploy
     paths:
       - 'backend/**'
       - '.github/workflows/deploy_khonofy-backend-api.yml'
@@ -16,10 +15,6 @@ on:
 
 jobs:
   build:
-    if: |
-      github.ref == 'refs/heads/main' ||
-      github.event_name == 'workflow_dispatch' ||
-      (github.ref == 'refs/heads/deploy' && contains(github.event.head_commit.message, 'chore: bump app version'))
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -80,8 +75,7 @@ jobs:
     needs: deploy
     if: |
       needs.deploy.result == 'success' &&
-      (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
-      github.ref == 'refs/heads/deploy'
+      github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     permissions:
       contents: read

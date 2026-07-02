@@ -1,3 +1,5 @@
+const INCORRECT_PASSWORD_PATTERN = /incorrect password/i;
+
 /** Extract a user-facing message from API / fetch errors. */
 export function getApiErrorMessage(error, fallback = 'Request failed') {
   if (!error) return fallback;
@@ -12,4 +14,8 @@ export function getApiErrorMessage(error, fallback = 'Request failed') {
 
   if (message) return message;
   return fallback;
+}
+
+export function isIncorrectPasswordError(error) {
+  return INCORRECT_PASSWORD_PATTERN.test(getApiErrorMessage(error, ''));
 }
