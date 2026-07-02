@@ -97,7 +97,7 @@ The API runs at `khonofy-backend-api` on Linux App Service. Required settings:
 | `FRONTEND_URL` | `https://polite-smoke-0f9de4610.7.azurestaticapps.net` |
 | `NODE_ENV` | `production` |
 | `WEBSITE_NODE_DEFAULT_VERSION` | `~20` |
-| **Startup command** | `npm start` (with a space — not `npmstart`) — do **not** prefix with `npx prisma generate &&`; `npm start` already runs `prisma generate` before boot |
+| **Startup command** | `npm start` (with a space — not `npmstart`) — runs `node server.js`; Prisma client is generated during CI build (`npm ci` / `postinstall`) |
 | **Always On** | `true` |
 | **App Service plan** | Basic (B1) or higher — Free (F1) stops when daily quota is exceeded |
 
@@ -113,7 +113,7 @@ Common log-stream crash:
 SyntaxError: The requested module '@prisma/client' does not provide an export named 'PrismaClient'
 ```
 
-Azure unpacks `node_modules.tar.gz` on boot; the generated Prisma client must be recreated at startup. The `npm start` script runs `prisma generate` automatically before launching the server.
+Azure unpacks `node_modules.tar.gz` on boot; the generated Prisma client must exist in the deployed package. CI runs `prisma generate` during `npm ci` (`postinstall`) before upload — do not run `prisma generate` on every container start.
 
 1. Open `https://khonofy-backend-api-d2fscwb7f3aeevac.southafricanorth-01.azurewebsites.net/health` — it must return `{"ok":true}`.
 2. In Azure Portal → **khonofy-backend-api** → **Configuration** → **General settings**:

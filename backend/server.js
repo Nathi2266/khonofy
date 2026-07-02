@@ -22,3 +22,11 @@ try {
   logStartupError('failed to start Khonofy backend', error);
   process.exit(1);
 }
+
+console.log('[startup] Khonofy backend booted', {
+  node: process.version,
+  nodeEnv: process.env.NODE_ENV,
+  port: process.env.PORT || 3001,
+  azure: Boolean(process.env.WEBSITE_SITE_NAME || process.env.WEBSITE_HOSTNAME),
+  databaseConfigured: Boolean(process.env.DATABASE_URL),
+});

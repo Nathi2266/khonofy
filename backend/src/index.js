@@ -1308,17 +1308,25 @@ app.use(
         callback(null, true);
         return;
       }
-      if (env.nodeEnv === 'development' && localDevOrigin.test(origin)) {
+      const normalizedOrigin = origin.replace(/\/$/, '');
+      if (env.nodeEnv === 'development' && localDevOrigin.test(normalizedOrigin)) {
         callback(null, true);
         return;
       }
-      if (env.corsOrigins.includes(origin)) {
+      if (env.corsOrigins.includes(normalizedOrigin)) {
         callback(null, true);
         return;
       }
+      if (env.nodeEnv === 'production' && env.isAllowedStaticWebAppOrigin(normalizedOrigin)) {
+        callback(null, true);
+        return;
+      }
+      console.warn(`CORS blocked origin: ${normalizedOrigin}`);
       callback(null, false);
     },
     credentials: true,
+    methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
   })
 );
 app.use(express.json({ limit: '15mb' }));
