@@ -7,7 +7,8 @@ import { captureApiError } from '@/lib/sentry-client';
  * Vite proxies /api → http://localhost:3001 in development.
  */
 // @ts-ignore
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+const API_BASE = import.meta.env.VITE_API_URL
+  || (import.meta.env.DEV ? '' : 'http://localhost:3001');
 
 /**
  * @typedef {Record<string, string | number | boolean | null | undefined>} QueryParams

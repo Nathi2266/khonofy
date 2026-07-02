@@ -1402,7 +1402,11 @@ app.post('/api/auth/login', async (req, res) => {
   } catch (error) {
     console.error('Login failed:', error);
     captureIfNeeded(error, req, { status: 400, route: '/api/auth/login' });
-    return sendError(res, 400, 'Login failed. Please try again.');
+    const message =
+      env.nodeEnv === 'development'
+        ? (error?.message || 'Login failed. Please try again.')
+        : 'Login failed. Please try again.';
+    return sendError(res, 400, message);
   }
 });
 

@@ -12,6 +12,11 @@ on:
       - 'backend/**'
       - '.github/workflows/deploy_khonofy-backend-api.yml'
   workflow_dispatch:
+    inputs:
+      deploy_sha:
+        description: Commit on deploy to build and release
+        required: false
+        type: string
 
 jobs:
   build:
@@ -21,6 +26,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.deploy_sha || github.ref }}
 
       - name: Log app version
         run: |
@@ -108,7 +115,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SELF_WORKFLOW: backend
-          DEPLOY_SHA: ${{ github.sha }}
+          DEPLOY_SHA: ${{ inputs.deploy_sha || github.sha }}
         run: |
           chmod +x scripts/open-deploy-pr-to-main.sh
           scripts/open-deploy-pr-to-main.sh
