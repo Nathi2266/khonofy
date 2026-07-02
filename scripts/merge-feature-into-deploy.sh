@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Open (or reuse) a PR from SOURCE_BRANCH into deploy, resolve version-file
-# conflicts when needed, then merge. Version bumps on deploy happen after merge.
+# DEPRECATED: use scripts/open-feature-pr-to-deploy.sh (opens PR only, no auto-merge).
+# Legacy script that auto-merged feature branches into deploy.
 set -euo pipefail
 
 SOURCE_BRANCH="${SOURCE_BRANCH:?SOURCE_BRANCH is required}"
